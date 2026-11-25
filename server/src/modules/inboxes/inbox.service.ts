@@ -1,4 +1,3 @@
-import { Types } from 'mongoose'
 import { Inbox } from './inbox.model.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import { logger } from '../../utils/logger.js'
@@ -27,7 +26,7 @@ export const inboxService = {
     const expiresAt = calculateExpiresAt(input.ttlHours, input.expiresAt)
 
     const inbox = await Inbox.create({
-      userId: new Types.ObjectId(userId),
+      userId,
       address,
       domain,
       type: input.type,
@@ -43,7 +42,7 @@ export const inboxService = {
   },
 
   async list(userId: string, query: ListInboxesQuery) {
-    const filter: Record<string, any> = { userId: new Types.ObjectId(userId) }
+    const filter: Record<string, any> = { userId }
     if (query.type) filter.type = query.type
     if (query.isActive !== undefined) filter.isActive = query.isActive
 
@@ -52,7 +51,6 @@ export const inboxService = {
         .sort({ createdAt: -1 })
         .skip(query.offset)
         .limit(query.limit)
-        .lean()
         .exec(),
       Inbox.countDocuments(filter),
     ])
@@ -62,9 +60,9 @@ export const inboxService = {
 
   async getById(userId: string, inboxId: string) {
     const inbox = await Inbox.findOne({
-      _id: new Types.ObjectId(inboxId),
-      userId: new Types.ObjectId(userId),
-    }).lean().exec()
+      _id: inboxId,
+      userId,
+    }).exec()
 
     if (!inbox) {
       throw new AppError(404, 'INBOX_NOT_FOUND', 'Inbox not found')
@@ -75,10 +73,10 @@ export const inboxService = {
 
   async update(userId: string, inboxId: string, input: UpdateInboxInput) {
     const inbox = await Inbox.findOneAndUpdate(
-      { _id: new Types.ObjectId(inboxId), userId: new Types.ObjectId(userId) },
+      { _id: inboxId, userId },
       { $set: input },
       { new: true, runValidators: true }
-    ).lean().exec()
+    ).exec()
 
     if (!inbox) {
       throw new AppError(404, 'INBOX_NOT_FOUND', 'Inbox not found')
@@ -90,8 +88,8 @@ export const inboxService = {
 
   async delete(userId: string, inboxId: string) {
     const inbox = await Inbox.findOneAndDelete({
-      _id: new Types.ObjectId(inboxId),
-      userId: new Types.ObjectId(userId),
+      _id: inboxId,
+      userId,
     })
 
     if (!inbox) {
@@ -103,7 +101,7 @@ export const inboxService = {
   },
 
   async findByAddress(address: string) {
-    return Inbox.findOne({ address: address.toLowerCase(), isActive: true }).lean().exec()
+    return Inbox.findOne({ address: address.toLowerCase(), isActive: true }).exec()
   },
 
   async incrementMessageCount(inboxId: string) {
@@ -111,7 +109,7 @@ export const inboxService = {
   },
 
   async checkCapacity(inboxId: string): Promise<boolean> {
-    const inbox = await Inbox.findById(inboxId).select('messageCount maxMessages').lean().exec()
+    const inbox = await Inbox.findById(inboxId).select('messageCount maxMessages').exec()
     if (!inbox) return false
     return inbox.messageCount < inbox.maxMessages
   },

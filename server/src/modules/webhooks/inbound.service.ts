@@ -1,15 +1,21 @@
 import crypto from 'crypto'
 import { Queue } from 'bullmq'
-import Redis from 'ioredis'
 import { env } from '../../config/env.js'
 import { inboxService } from '../inboxes/inbox.service.js'
 import { logger } from '../../utils/logger.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import type { SesWebhookInput, MailgunWebhookInput } from './inbound.schema.js'
 
-const RedisClient = (await import('ioredis')).default
-const connection = new RedisClient(env.REDIS_URL, { maxRetriesPerRequest: null })
-const emailParsingQueue = new Queue('email-parsing', { connection })
+let emailParsingQueue: Queue
+
+async function initQueue() {
+  const ioredis = await import('ioredis')
+  const RedisClient = ioredis.default || ioredis
+  const connection = new (RedisClient as any)(env.REDIS_URL, { maxRetriesPerRequest: null })
+  emailParsingQueue = new Queue('email-parsing', { connection })
+}
+
+initQueue()
 
 function verifySesSignature(payload: string, signature: string, secret: string): boolean {
   const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64')
