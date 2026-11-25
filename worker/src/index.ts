@@ -1,10 +1,11 @@
 import 'dotenv/config'
 import { Queue, Worker } from 'bullmq'
-import IORedis from 'ioredis'
+import Redis from 'ioredis'
 import { env } from './config/env.js'
 import { logger } from './utils/logger.js'
 
-const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null })
+const RedisClient = (await import('ioredis')).default
+const connection = new RedisClient(env.REDIS_URL, { maxRetriesPerRequest: null })
 
 export const emailParsingQueue = new Queue('email-parsing', { connection })
 export const aiQueue = new Queue('ai', { connection })

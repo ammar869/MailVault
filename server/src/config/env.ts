@@ -12,7 +12,7 @@ const envSchema = z.object({
   S3_ENDPOINT: z.string().url().default('http://localhost:9000'),
   S3_ACCESS_KEY: z.string().default('minioadmin'),
   S3_SECRET_KEY: z.string().default('minioadmin'),
-  S3_REGION: z.string().default('us-east-1',
+  S3_REGION: z.string().default('us-east-1'),
   LLM_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().url().optional(),
   WEBHOOK_SECRET_SES: z.string().optional(),

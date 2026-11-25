@@ -1,16 +1,15 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN npm install -g pnpm
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm install --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm run build --filter=@mailvault/client
+RUN npm run build --workspace=@mailvault/client
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/client/dist /usr/share/nginx/html
