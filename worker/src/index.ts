@@ -34,10 +34,6 @@ createWorker('ai', aiQueue, async (job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing AI job')
 })
 
-createWorker('cleanup', cleanupQueue, async (job) => {
-  logger.info({ jobId: job.id, data: job.data }, 'Processing cleanup job')
-})
-
 createWorker('webhook-delivery', webhookDeliveryQueue, async (job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing webhook delivery job')
 })
