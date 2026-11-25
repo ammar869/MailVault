@@ -8,6 +8,8 @@ import { env } from './config/env.js'
 import { connectDB } from './config/database.js'
 import { healthRouter } from './routes/health.js'
 import { authRouter } from './modules/auth/auth.routes.js'
+import { inboxRouter } from './modules/inboxes/inbox.routes.js'
+import { inboundWebhookRouter } from './modules/webhooks/inbound.routes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './utils/logger.js'
 
@@ -22,6 +24,8 @@ app.use(cookieParser())
 
 app.use('/api/v1/health', healthRouter)
 app.use('/api/v1/auth', authRouter)
+app.use('/api/v1/inboxes', inboxRouter)
+app.use('/webhooks/inbound', inboundWebhookRouter)
 
 app.use((req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } })
