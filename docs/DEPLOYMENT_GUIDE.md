@@ -1,0 +1,77 @@
+# MailVault — Deployment Guide
+
+## 1. Local Development (Docker Compose)
+
+`infrastructure/docker-compose.yml` runs:
+- `mailvault-mongo` (MongoDB)
+- `mailvault-redis` (Redis)
+- `mailvault-minio` (S3-compatible, local)
+- `mailvault-server` (Express API)
+- `mailvault-worker` (BullMQ worker)
+- `mailvault-client` (Vite dev server) or built static served by Nginx
+
+Run: `docker-compose up --build`
+
+Environment variables (`.env`, gitignored):
+```
+PORT=4000
+MONGODB_URI=mongodb://mongodb:27017/mailvault
+REDIS_URL=redis://redis:6379
+JWT_ACCESS_SECRET=<secret>
+JWT_REFRESH_SECRET=<secret>
+BCRYPT_ROUNDS=12
+S3_BUCKET=mailvault-dev
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY=<key>
+S3_SECRET_KEY=<secret>
+LLM_API_KEY=<key>
+LLM_BASE_URL=https://api.example.com/v1
+WEBHOOK_SECRET_SES=<secret>
+WEBHOOK_SECRET_MAILGUN=<secret>
+CLIENT_ORIGIN=http://localhost:5173
+```
+
+## 2. Build Artifacts
+
+- `Dockerfile.client` — Vite build → Nginx static serve.
+- `Dockerfile.server` — Node production, runs Express API.
+- `Dockerfile.worker` — Node production, runs BullMQ worker.
+- Multi-stage builds; `npm ci` only.
+
+## 3. Production Considerations
+
+- Replace MinIO with Amazon S3.
+- Replace self-hosted MongoDB/Redis with managed equivalents (MongoDB Atlas, Redis/ElastiCache) or self-hosted HA.
+- Inbound email provider: AWS SES, Mailgun, or equivalent; configure MX/SPF/DKIM/DMARC on customer domains.
+- Secrets via platform secret manager (AWS Secrets Manager, etc.).
+- TLS via LB or cloud-managed certs.
+- Rolling deploy for server/worker; zero-downtime not required for MVP but drain connections on stop.
+- Database migrations: none at MVP (Mongoose schema); use `mongoose` validation; consider migration tool for schema changes later.
+- Backups: MongoDB snapshots; S3 versioning/lifecycle; Redis persistence optional (cache/queue).
+- Monitoring: health check `/health`, structured logs, error tracking, queue depth alerts, webhook lag alerts.
+
+## 4. Environment Matrix
+
+| Variable | Dev | Prod |
+|---|---|---|
+| S3 | MinIO local | Amazon S3 |
+| MongoDB | Docker local | Atlas / self-hosted |
+| Redis | Docker local | ElastiCache / self-hosted |
+| Inbound provider | SES sandbox / Mailgun test | SES production / Mailgun |
+| TLS | none / self-signed | managed certs |
+
+## 5. Decisions Requiring Verification
+
+- SES inbound email availability in target AWS region (region-limited feature).
+- Managed Redis BullMQ compatibility (cluster mode considerations).
+- S3 CORS and presigned URL signing with chosen provider.
+
+## 6. Checklist
+
+- [ ] Docker Compose stack starts with one command
+- [ ] `/health` returns 200
+- [ ] Secrets not in repo
+- [ ] S3 bucket private
+- [ ] Inbound MX/SPF/DKIM verified with provider
+- [ ] Webhook signature secrets configured
+- [ ] Backup strategy for MongoDB defined
