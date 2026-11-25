@@ -1,11 +1,11 @@
 import 'dotenv/config'
 import { Queue, Worker } from 'bullmq'
-import Redis from 'ioredis'
-import { env } from './config/env.js'
-import { logger } from './utils/logger.js'
+import { env, logger } from '@mailvault/shared'
+import { processParseEmailJob } from './jobs/parseEmail.js'
 
-const RedisClient = (await import('ioredis')).default
-const connection = new RedisClient(env.REDIS_URL, { maxRetriesPerRequest: null })
+const ioredis = await import('ioredis')
+const RedisClient = ioredis.default || ioredis
+const connection = new (RedisClient as any)(env.REDIS_URL, { maxRetriesPerRequest: null })
 
 export const emailParsingQueue = new Queue('email-parsing', { connection })
 export const aiQueue = new Queue('ai', { connection })
@@ -27,6 +27,7 @@ function createWorker(name: string, queue: Queue, processor: (job: any) => Promi
 
 createWorker('email-parsing', emailParsingQueue, async (job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing email parsing job')
+  await processParseEmailJob(job.data)
 })
 
 createWorker('ai', aiQueue, async (job) => {

@@ -21,6 +21,9 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*"],
+  "references": [
+    { "path": "../shared" }
+  ],
+  "include": ["src/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist"]
 }
