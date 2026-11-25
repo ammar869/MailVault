@@ -2,6 +2,8 @@ import 'dotenv/config'
 import { Queue, Worker } from 'bullmq'
 import { env, logger } from '@mailvault/shared'
 import { processParseEmailJob } from './jobs/parseEmail.js'
+import './jobs/ai.js'
+import './jobs/cleanup.js'
 
 const ioredis = await import('ioredis')
 const RedisClient = ioredis.default || ioredis
@@ -40,6 +42,10 @@ createWorker('webhook-delivery', webhookDeliveryQueue, async (job) => {
 
 createWorker('analytics', analyticsQueue, async (job) => {
   logger.info({ jobId: job.id, data: job.data }, 'Processing analytics job')
+})
+
+createWorker('cleanup', cleanupQueue, async (job) => {
+  logger.info({ jobId: job.id, name: job.name }, `Processing cleanup job: ${job.name}`)
 })
 
 process.on('SIGTERM', async () => {

@@ -13,6 +13,7 @@ import { inboxRouter } from './modules/inboxes/inbox.routes.js'
 import { inboundWebhookRouter } from './modules/webhooks/inbound.routes.js'
 import { emailRouter } from './modules/emails/email.routes.js'
 import { aliasRouter } from './modules/aliases/alias.routes.js'
+import { aiRouter } from './modules/ai/ai.routes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { logger } from './utils/logger.js'
 import { initSocket } from './utils/socket.js'
@@ -33,6 +34,7 @@ app.use('/api/v1/inboxes', inboxRouter)
 app.use('/webhooks/inbound', inboundWebhookRouter)
 app.use('/api/v1/emails', emailRouter)
 app.use('/api/v1/aliases', aliasRouter)
+app.use('/api/v1/ai', aiRouter)
 
 app.use((req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } })

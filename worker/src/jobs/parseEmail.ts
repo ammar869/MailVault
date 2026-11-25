@@ -7,6 +7,7 @@ import { extractOtpCodes, extractLinks } from '../utils/extract.js'
 import { env } from '../config/env.js'
 import { logger } from '../utils/logger.js'
 import { emailParsingQueue } from '../index.js'
+import { aiQueue } from '../index.js'
 
 interface ParseEmailJobData {
   inboxId: string
@@ -127,7 +128,7 @@ export async function processParseEmailJob(jobData: ParseEmailJobData): Promise<
 
   const attachments = await processAttachments(parsed, '')
 
-  await emailService.create({
+  const email = await emailService.create({
     inboxId: jobData.inboxId,
     messageId: jobData.messageId,
     from,
@@ -141,6 +142,20 @@ export async function processParseEmailJob(jobData: ParseEmailJobData): Promise<
     size: rawMessage.length,
     attachments,
     otpCodes,
+  })
+
+  // Enqueue AI processing job
+  await aiQueue.add('process-ai', {
+    emailId: email._id,
+    inboxId: jobData.inboxId,
+    from: from.address,
+    to: to.map(t => t.address),
+    subject: parsed.subject || '',
+    bodyText: textBody,
+    bodyHtml: htmlBody,
+    hasAttachment: attachments.length > 0,
+    otpCodes,
+    userId: email.userId,
   })
 
   logger.info({ messageId: jobData.messageId, inboxId: jobData.inboxId, otpCount: otpCodes.length }, 'Email parsed and stored')
