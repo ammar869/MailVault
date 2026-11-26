@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IAuditLog extends Document {
   userId: Types.ObjectId | null
@@ -58,4 +58,4 @@ auditLogSchema.index({ action: 1, createdAt: -1 })
 auditLogSchema.index({ resourceType: 1, resourceId: 1 })
 auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 }) // 90 days TTL
 
-export const AuditLog = models.AuditLog || model<IAuditLog>('AuditLog', auditLogSchema)
+export const AuditLog = mongoose.models.AuditLog || model<IAuditLog>('AuditLog', auditLogSchema)

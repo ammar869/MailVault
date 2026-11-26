@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IAlias extends Document {
   userId: Types.ObjectId
@@ -67,4 +67,4 @@ aliasSchema.index({ address: 1 }, { unique: true })
 aliasSchema.index({ targetInboxId: 1 })
 aliasSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 
-export const Alias = models.Alias || model<IAlias>('Alias', aliasSchema)
+export const Alias = mongoose.models.Alias || model<IAlias>('Alias', aliasSchema)

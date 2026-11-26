@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IEmailAddress {
   name: string
@@ -133,4 +133,4 @@ emailSchema.index({ inboxId: 1, messageId: 1 }, { unique: true })
 emailSchema.index({ inboxId: 1, status: 1 })
 emailSchema.index({ aiCategory: 1 })
 
-export const Email = models.Email || model<IEmail>('Email', emailSchema)
+export const Email = mongoose.models.Email || model<IEmail>('Email', emailSchema)

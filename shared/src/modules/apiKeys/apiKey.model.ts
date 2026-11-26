@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export type ApiKeyScope = 'emails:read' | 'emails:write' | 'inboxes:read' | 'inboxes:write' | 'aliases:read' | 'aliases:write' | 'ai:read' | 'analytics:read' | 'webhooks:read' | 'webhooks:write' | '*'
 
@@ -71,4 +71,4 @@ const apiKeySchema = new Schema<IApiKey>(
 apiKeySchema.index({ userId: 1, isActive: 1 })
 apiKeySchema.index({ keyPrefix: 1 })
 
-export const ApiKey = models.ApiKey || model<IApiKey>('ApiKey', apiKeySchema)
+export const ApiKey = mongoose.models.ApiKey || model<IApiKey>('ApiKey', apiKeySchema)

@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IAnalyticsDaily extends Document {
   userId: Types.ObjectId
@@ -97,4 +97,4 @@ const analyticsDailySchema = new Schema<IAnalyticsDaily>(
 analyticsDailySchema.index({ userId: 1, date: -1 })
 analyticsDailySchema.index({ userId: 1, inboxId: 1, date: -1 }, { unique: true })
 
-export const AnalyticsDaily = models.AnalyticsDaily || model<IAnalyticsDaily>('AnalyticsDaily', analyticsDailySchema)
+export const AnalyticsDaily = mongoose.models.AnalyticsDaily || model<IAnalyticsDaily>('AnalyticsDaily', analyticsDailySchema)

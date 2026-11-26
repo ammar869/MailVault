@@ -1,7 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+function apiUrl(path: string) {
+  const prefix = API_BASE.endsWith('/api/v1') ? API_BASE : `${API_BASE}/api/v1`
+  return `${prefix}${path}`
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}/api/v1${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -25,21 +30,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   auth: {
     register: (email: string, password: string, name?: string) =>
-      request<{ user: any; accessToken: string }>('/auth/register', {
+      request<{ data: { user: any; accessToken: string } }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password, name }),
-      }),
+      }).then((response) => response.data),
     login: (email: string, password: string) =>
-      request<{ user: any; accessToken: string }>('/auth/login', {
+      request<{ data: { user: any; accessToken: string } }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
-      }),
+      }).then((response) => response.data),
     logout: () =>
       request<void>('/auth/logout', { method: 'POST' }),
     me: () =>
-      request<{ user: any }>('/auth/me'),
+      request<{ data: { user: any } }>('/auth/me').then((response) => response.data),
     refresh: () =>
-      request<{ accessToken: string }>('/auth/refresh', { method: 'POST' }),
+      request<{ data: { accessToken: string } }>('/auth/refresh', { method: 'POST' }).then((response) => response.data),
   },
 
   inboxes: {

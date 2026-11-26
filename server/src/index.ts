@@ -51,13 +51,40 @@ app.use(errorHandler)
 const startServer = async () => {
   try {
     await connectDB()
-    await initSocket(httpServer)
+    const redisAvailable = await checkRedisConnection()
+    if (redisAvailable) {
+      await initSocket(httpServer)
+    } else if (env.NODE_ENV === 'production') {
+      throw new Error('Redis is required in production')
+    } else {
+      logger.warn('Redis is unavailable; starting API without realtime features')
+    }
     httpServer.listen(env.PORT, () => {
       logger.info(`Server running on port ${env.PORT}`)
     })
   } catch (error) {
     logger.error({ err: error }, 'Failed to start server')
     process.exit(1)
+  }
+}
+
+async function checkRedisConnection(): Promise<boolean> {
+  const ioredis = await import('ioredis')
+  const RedisClient = ioredis.default || ioredis
+  const probe = new (RedisClient as any)(env.REDIS_URL, {
+    lazyConnect: true,
+    connectTimeout: 1000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: () => null,
+  })
+  try {
+    await probe.connect()
+    await probe.ping()
+    await probe.quit()
+    return true
+  } catch {
+    probe.disconnect()
+    return false
   }
 }
 

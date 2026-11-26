@@ -1,27 +1,23 @@
 # MailVault — Deployment Guide
 
-## 1. Local Development (Docker Compose)
+## 1. Local Development (without Docker)
 
-`infrastructure/docker-compose.yml` runs:
-- `mailvault-mongo` (MongoDB)
-- `mailvault-redis` (Redis)
-- `mailvault-minio` (S3-compatible, local)
-- `mailvault-server` (Express API)
-- `mailvault-worker` (BullMQ worker)
-- `mailvault-client` (Vite dev server) or built static served by Nginx
-
-Run: `docker-compose up --build`
+Install Node dependencies with `npm install`. Start MongoDB and Redis as local
+services, set their local connection URLs in `.env`, then run `npm run dev:server`,
+`npm run dev:worker`, and `npm run dev:client` in separate terminals. The client is
+available at `http://localhost:5173`. The UI can start without MongoDB or Redis,
+but API-backed features need both services.
 
 Environment variables (`.env`, gitignored):
 ```
 PORT=4000
-MONGODB_URI=mongodb://mongodb:27017/mailvault
-REDIS_URL=redis://redis:6379
+MONGODB_URI=mongodb://localhost:27017/mailvault
+REDIS_URL=redis://localhost:6379
 JWT_ACCESS_SECRET=<secret>
 JWT_REFRESH_SECRET=<secret>
 BCRYPT_ROUNDS=12
 S3_BUCKET=mailvault-dev
-S3_ENDPOINT=http://minio:9000
+S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY=<key>
 S3_SECRET_KEY=<secret>
 LLM_API_KEY=<key>

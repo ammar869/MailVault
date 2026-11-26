@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export type WebhookEventType = 'email.new' | 'email.read' | 'email.deleted' | 'otp.extracted' | 'inbox.expired' | 'inbox.created' | 'alias.created'
 
@@ -77,4 +77,4 @@ const outgoingWebhookSchema = new Schema<IOutgoingWebhook>(
 
 outgoingWebhookSchema.index({ userId: 1, isActive: 1 })
 
-export const OutgoingWebhook = models.OutgoingWebhook || model<IOutgoingWebhook>('OutgoingWebhook', outgoingWebhookSchema)
+export const OutgoingWebhook = mongoose.models.OutgoingWebhook || model<IOutgoingWebhook>('OutgoingWebhook', outgoingWebhookSchema)

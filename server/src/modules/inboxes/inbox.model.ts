@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export type InboxType = 'temporary' | 'disposable' | 'alias'
 
@@ -89,4 +89,4 @@ inboxSchema.index({ userId: 1, isActive: 1 })
 inboxSchema.index({ address: 1 }, { unique: true })
 inboxSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 
-export const Inbox = models.Inbox || model<IInbox>('Inbox', inboxSchema)
+export const Inbox = mongoose.models.Inbox || model<IInbox>('Inbox', inboxSchema)

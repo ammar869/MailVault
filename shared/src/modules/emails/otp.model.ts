@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IOtpRecord extends Document {
   emailId: Types.ObjectId
@@ -49,4 +49,4 @@ const otpRecordSchema = new Schema<IOtpRecord>(
 otpRecordSchema.index({ emailId: 1 })
 otpRecordSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 
-export const OtpRecord = models.OtpRecord || model<IOtpRecord>('OtpRecord', otpRecordSchema)
+export const OtpRecord = mongoose.models.OtpRecord || model<IOtpRecord>('OtpRecord', otpRecordSchema)

@@ -1,51 +1,37 @@
-# MailVault - Phase 0 Scaffolding Complete
+# MailVault
 
-## Quick Start
+## Run without Docker
+
+Install the Node dependencies once:
 
 ```bash
-# Install dependencies (using pnpm)
-pnpm install
-
-# Start all services with Docker Compose
-docker-compose -f infrastructure/docker-compose.yml up --build
-
-# Or start individually:
-# Terminal 1: pnpm dev:server
-# Terminal 2: pnpm dev:worker
-# Terminal 3: pnpm dev:client
+npm install
 ```
 
-## Verify
+Start the client:
 
-- **Server health**: http://localhost:4000/api/v1/health
-- **Client**: http://localhost:5173
-- **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
-- **MongoDB**: localhost:27017
-- **Redis**: localhost:6379
-
-## Project Structure
-
-```
-MailVault/
-├── client/          # React + Vite + Tailwind
-├── server/          # Express API
-├── worker/          # BullMQ background jobs
-├── infrastructure/  # Docker, nginx configs
-├── docs/            # Architecture documentation
-└── tests/           # (to be added)
+```bash
+npm run dev:client
 ```
 
-## Available Scripts
+Open <http://localhost:5173>.
 
-- `pnpm lint` - Lint all workspaces
-- `pnpm typecheck` - Type-check all workspaces
-- `pnpm test` - Run tests (when added)
-- `pnpm docker:up` - Start Docker Compose stack
-- `pnpm docker:down` - Stop Docker Compose stack
+To run the API and background worker as well, start MongoDB and Redis locally, set
+`MONGODB_URI` and `REDIS_URL` in `.env`, then run these in separate terminals:
 
-## Next Steps (Phase 1)
+```bash
+npm run dev:server
+npm run dev:worker
+```
 
-1. Implement authentication module (register, login, JWT)
-2. Create User model and MongoDB connection
-3. Add Zod validation schemas
-4. Set up refresh token rotation
+The client can load without those services, but login, email, inbox, and other
+API-backed features require MongoDB and Redis to be running locally.
+
+## Other scripts
+
+- `npm run lint` — lint all workspaces
+- `npm run typecheck` — type-check all workspaces
+- `npm run build` — build all workspaces
+
+Docker Compose files remain under `infrastructure/` for later use, but the
+development instructions above do not start or depend on Docker.

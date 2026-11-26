@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IAIResult extends Document {
   emailId: Types.ObjectId
@@ -93,4 +93,4 @@ aiResultSchema.index({ emailId: 1 }, { unique: true })
 aiResultSchema.index({ userId: 1, createdAt: -1 })
 aiResultSchema.index({ inboxId: 1, createdAt: -1 })
 
-export const AIResult = models.AIResult || model<IAIResult>('AIResult', aiResultSchema)
+export const AIResult = mongoose.models.AIResult || model<IAIResult>('AIResult', aiResultSchema)

@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export type AnalyticsEventType = 'email.received' | 'email.read' | 'email.deleted' | 'otp.extracted' | 'attachment.downloaded' | 'ai.completed' | 'webhook.delivered' | 'webhook.failed' | 'inbox.created' | 'inbox.expired' | 'alias.created'
 
@@ -46,4 +46,4 @@ analyticsEventSchema.index({ inboxId: 1, createdAt: -1 })
 analyticsEventSchema.index({ eventType: 1, createdAt: -1 })
 analyticsEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 }) // 90 days TTL
 
-export const AnalyticsEvent = models.AnalyticsEvent || model<IAnalyticsEvent>('AnalyticsEvent', analyticsEventSchema)
+export const AnalyticsEvent = mongoose.models.AnalyticsEvent || model<IAnalyticsEvent>('AnalyticsEvent', analyticsEventSchema)

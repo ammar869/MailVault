@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IAttachment extends Document {
   emailId: Types.ObjectId
@@ -56,4 +56,4 @@ const attachmentSchema = new Schema<IAttachment>(
 attachmentSchema.index({ emailId: 1 })
 attachmentSchema.index({ s3Key: 1 }, { unique: true })
 
-export const Attachment = models.Attachment || model<IAttachment>('Attachment', attachmentSchema)
+export const Attachment = mongoose.models.Attachment || model<IAttachment>('Attachment', attachmentSchema)

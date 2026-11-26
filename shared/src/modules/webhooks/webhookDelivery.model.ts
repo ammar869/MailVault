@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed' | 'cancelled'
 
@@ -84,4 +84,4 @@ webhookDeliverySchema.index({ webhookId: 1, status: 1 })
 webhookDeliverySchema.index({ nextRetryAt: 1, status: 1 })
 webhookDeliverySchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 }) // 30 days TTL
 
-export const WebhookDelivery = models.WebhookDelivery || model<IWebhookDelivery>('WebhookDelivery', webhookDeliverySchema)
+export const WebhookDelivery = mongoose.models.WebhookDelivery || model<IWebhookDelivery>('WebhookDelivery', webhookDeliverySchema)

@@ -1,4 +1,4 @@
-import { Schema, model, models, Document, Types } from 'mongoose'
+import mongoose, { Schema, model, Document, Types } from 'mongoose'
 
 export interface IRawInboundMessage extends Document {
   inboxId: Types.ObjectId
@@ -27,4 +27,4 @@ const rawInboundMessageSchema = new Schema<IRawInboundMessage>({
 rawInboundMessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 604800 })
 rawInboundMessageSchema.index({ inboxId: 1, provider: 1, providerMessageId: 1 }, { unique: true })
 
-export const RawInboundMessage = models.RawInboundMessage || model<IRawInboundMessage>('RawInboundMessage', rawInboundMessageSchema)
+export const RawInboundMessage = mongoose.models.RawInboundMessage || model<IRawInboundMessage>('RawInboundMessage', rawInboundMessageSchema)
