@@ -16,6 +16,7 @@ const envSchema = z.object({
   LLM_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().url().optional(),
   WEBHOOK_SECRET_SES: z.string().optional(),
+  SES_SNS_TOPIC_ARN: z.string().optional(),
   WEBHOOK_SECRET_MAILGUN: z.string().optional(),
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
 })

@@ -2,12 +2,8 @@ import 'dotenv/config'
 import { connectDB } from '../config/database.js'
 import { aiService } from '@mailvault/shared'
 import { logger } from '../utils/logger.js'
-import { Worker } from 'bullmq'
-import { env } from '../config/env.js'
-
-const ioredis = await import('ioredis')
-const RedisClient = ioredis.default || ioredis
-const connection = new (RedisClient as any)(env.REDIS_URL, { maxRetriesPerRequest: null })
+import { AIResult } from '@mailvault/shared'
+import { publishRealtimeEvent } from '../utils/socket.js'
 
 interface AIJobData {
   emailId: string
@@ -40,12 +36,15 @@ export async function processAIJob(jobData: AIJobData): Promise<void> {
     otpCodes: jobData.otpCodes,
   })
 
+  const result = await AIResult.findOne({ emailId: jobData.emailId }).lean().exec()
+  if (result) {
+    await publishRealtimeEvent(jobData.inboxId, 'ai.completed', {
+      emailId: jobData.emailId,
+      status: result.status,
+    })
+  }
+
   logger.info({ emailId: jobData.emailId }, 'AI job completed')
 }
 
-new Worker('ai', async (job) => {
-  logger.info({ jobId: job.id, emailId: job.data.emailId }, 'Processing AI job')
-  await processAIJob(job.data)
-}, { connection, concurrency: 3 })
-
-logger.info('AI worker registered')
+logger.info('AI job processor loaded')

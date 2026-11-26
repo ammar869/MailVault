@@ -1,21 +1,10 @@
 import 'dotenv/config'
 import { connectDB } from '../config/database.js'
-import { analyticsService } from '@mailvault/shared'
 import { logger } from '../utils/logger.js'
-import { Worker } from 'bullmq'
-import { env } from '../config/env.js'
-import { Email } from '@mailvault/shared'
-import { Inbox } from '@mailvault/shared'
-import { OutgoingWebhook } from '@mailvault/shared'
-
-const ioredis = await import('ioredis')
-const RedisClient = ioredis.default || ioredis
-const connection = new (RedisClient as any)(env.REDIS_URL, { maxRetriesPerRequest: null })
-
-new Worker('analytics', async (job) => {
-  logger.info({ jobId: job.id, name: job.name }, `Processing analytics job: ${job.name}`)
-
-  switch (job.name) {
+export async function processAnalyticsJob(name: string): Promise<void> {
+  await connectDB()
+  logger.info({ name }, `Processing analytics job: ${name}`)
+  switch (name) {
     case 'aggregate-daily':
       await aggregateDailyStats()
       break
@@ -23,9 +12,9 @@ new Worker('analytics', async (job) => {
       await cleanupOldEvents()
       break
     default:
-      logger.warn({ jobName: job.name }, 'Unknown analytics job')
+      logger.warn({ jobName: name }, 'Unknown analytics job')
   }
-}, { connection, concurrency: 1 })
+}
 
 async function aggregateDailyStats() {
   logger.info('Aggregating daily stats...')
@@ -50,4 +39,4 @@ async function cleanupOldEvents() {
 // Event-driven stats recording is handled by the analytics service
 // This worker is for scheduled aggregation/cleanup tasks
 
-logger.info('Analytics worker registered')
+logger.info('Analytics job processors loaded')

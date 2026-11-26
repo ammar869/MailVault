@@ -65,6 +65,13 @@ services:
       S3_SECRET_KEY: test
       S3_REGION: us-east-1
       CLIENT_ORIGIN: http://localhost:5173
+      WEBHOOK_SECRET_SES: ${WEBHOOK_SECRET_SES:-}
+      SES_SNS_TOPIC_ARN: ${SES_SNS_TOPIC_ARN:-}
+      WEBHOOK_SECRET_MAILGUN: ${WEBHOOK_SECRET_MAILGUN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_MONTHLY_TOKEN_LIMIT: ${AI_MONTHLY_TOKEN_LIMIT:-1000000}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -90,6 +97,10 @@ services:
       S3_ACCESS_KEY: test
       S3_SECRET_KEY: test
       S3_REGION: us-east-1
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      AI_MONTHLY_TOKEN_LIMIT: ${AI_MONTHLY_TOKEN_LIMIT:-1000000}
     depends_on:
       mongodb:
         condition: service_healthy

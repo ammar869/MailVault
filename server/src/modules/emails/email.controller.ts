@@ -4,6 +4,7 @@ import { AppError } from '../../middleware/errorHandler.js'
 import { AuthRequest } from '../../middleware/authenticate.js'
 import { getPresignedUrl } from '../../utils/s3.js'
 import type { ListEmailsQuery, UpdateEmailInput } from './email.schema.js'
+import { OtpRecord } from './otp.model.js'
 
 export const emailController = {
   list: async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -22,7 +23,14 @@ export const emailController = {
   getById: async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const email = await emailService.getById(req.user!.userId, req.params.id)
-      res.json({ data: email })
+      const otpRecords = await OtpRecord.find({ emailId: req.params.id }).sort({ createdAt: -1 }).lean().exec()
+      res.json({
+        data: {
+          email,
+          attachments: email.attachments,
+          otpRecords: otpRecords.map(otp => ({ ...otp, id: otp._id.toString() })),
+        },
+      })
     } catch (error) {
       next(error)
     }

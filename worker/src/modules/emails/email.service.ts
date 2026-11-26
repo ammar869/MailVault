@@ -7,6 +7,7 @@ import { analyticsService } from '@mailvault/shared'
 import { webhookDeliveryService } from '@mailvault/shared'
 import { inboxService } from '../inboxes/inbox.service.js'
 import { logger } from '../../utils/logger.js'
+import { publishRealtimeEvent } from '../../utils/socket.js'
 
 export const emailService = {
   async create(data: {
@@ -23,6 +24,7 @@ export const emailService = {
     size: number
     attachments: { filename: string; mimeType: string; size: number; s3Key: string; s3Bucket: string }[]
     otpCodes: string[]
+    countInbox?: boolean
   }) {
     const email = await Email.create({
       inboxId: data.inboxId,
@@ -67,7 +69,19 @@ export const emailService = {
       )
     }
 
-    await inboxService.incrementMessageCount(data.inboxId)
+    await publishRealtimeEvent(data.inboxId, 'email.new', {
+      id: email._id,
+      messageId: email.messageId,
+      from: email.from,
+      subject: email.subject,
+      receivedAt: email.receivedAt,
+      otpCodes: email.otpCodes,
+    })
+    for (const code of data.otpCodes) {
+      await publishRealtimeEvent(data.inboxId, 'otp.extracted', { otp: code })
+    }
+
+    if (data.countInbox !== false) await inboxService.incrementMessageCount(data.inboxId)
 
     logger.info({ emailId: email._id, inboxId: data.inboxId, messageId: data.messageId }, 'Email created')
 

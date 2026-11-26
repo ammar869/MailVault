@@ -5,9 +5,37 @@ import { inboxService } from '../inboxes/inbox.service.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import { logger } from '../../utils/logger.js'
 import { emitEmailNew, emitOtpExtracted, emitEmailRead, emitEmailDeleted } from '../../utils/socket.js'
+import { AIResult } from '@mailvault/shared'
 import type { ListEmailsQuery, UpdateEmailInput } from './email.schema.js'
 
 export const emailService = {
+  serialize(email: any) {
+    return {
+      id: email._id.toString(),
+      messageId: email.messageId,
+      from: email.from?.name ? `${email.from.name} <${email.from.address}>` : email.from?.address || '',
+      to: (email.to || []).map((address: { address: string }) => address.address),
+      cc: (email.cc || []).map((address: { address: string }) => address.address),
+      bcc: (email.bcc || []).map((address: { address: string }) => address.address),
+      subject: email.subject,
+      bodyText: email.textBody,
+      bodyHtml: email.htmlBody,
+      status: email.status,
+      hasAttachment: (email.attachments || []).length > 0,
+      receivedAt: email.receivedAt,
+      inboxId: email.inboxId.toString(),
+      otpCodes: email.otpCodes || [],
+      aiSummary: email.aiSummary || null,
+      aiCategory: email.aiCategory || null,
+      riskScore: email.riskScore ?? null,
+      riskFlags: email.riskFlags || [],
+      attachments: (email.attachments || []).map((attachment: any) => ({
+        id: attachment._id.toString(), filename: attachment.filename, mimeType: attachment.mimeType,
+        size: attachment.size, s3Bucket: attachment.s3Bucket, s3Key: attachment.s3Key,
+      })),
+    }
+  },
+
   async create(data: {
     inboxId: string
     messageId: string
@@ -22,6 +50,7 @@ export const emailService = {
     size: number
     attachments: { filename: string; mimeType: string; size: number; s3Key: string; s3Bucket: string }[]
     otpCodes: string[]
+    countInbox?: boolean
   }) {
     const email = await Email.create({
       inboxId: data.inboxId,
@@ -66,7 +95,7 @@ export const emailService = {
       )
     }
 
-    await inboxService.incrementMessageCount(data.inboxId)
+    if (data.countInbox !== false) await inboxService.incrementMessageCount(data.inboxId)
 
     logger.info({ emailId: email._id, inboxId: data.inboxId, messageId: data.messageId }, 'Email created')
 
@@ -99,6 +128,7 @@ export const emailService = {
     const filter: Record<string, any> = { inboxId: { $in: Array.isArray(inboxFilter._id) ? inboxFilter._id : [inboxFilter._id] } }
 
     if (query.status) filter.status = query.status
+    else filter.status = { $ne: 'deleted' }
     if (query.from) filter['from.address'] = { $regex: query.from, $options: 'i' }
     if (query.subject) filter.subject = { $regex: query.subject, $options: 'i' }
     if (query.startDate || query.endDate) {
@@ -121,11 +151,11 @@ export const emailService = {
       Email.countDocuments(filter),
     ])
 
-    return { emails, total }
+    return { emails: emails.map(email => emailService.serialize(email)), total }
   },
 
   async getById(userId: string, emailId: string) {
-    const email = await Email.findById(emailId)
+    const email = await Email.findOne({ _id: emailId, status: { $ne: 'deleted' } })
       .populate('attachments')
       .lean()
       .exec()
@@ -139,7 +169,8 @@ export const emailService = {
       throw new AppError(403, 'FORBIDDEN', 'Access denied')
     }
 
-    return email
+    const aiResult = await AIResult.findOne({ emailId }).lean().exec()
+    return { ...this.serialize(email), aiSummary: aiResult?.summary || null, aiCategory: aiResult?.category || null, riskScore: aiResult?.phishingScore ?? null, riskFlags: aiResult?.phishingReasons || [] }
   },
 
   async update(userId: string, emailId: string, input: UpdateEmailInput) {
@@ -185,7 +216,6 @@ export const emailService = {
     }
 
     await Email.findByIdAndUpdate(emailId, { $set: { status: 'deleted' } }).exec()
-    await Attachment.deleteMany({ emailId }).exec()
     await OtpRecord.deleteMany({ emailId }).exec()
 
     logger.info({ emailId, userId }, 'Email soft-deleted')

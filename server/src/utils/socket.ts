@@ -4,10 +4,13 @@ import { createAdapter } from '@socket.io/redis-adapter'
 import { env } from '../config/env.js'
 import { logger } from './logger.js'
 import { verifyAccessToken } from '../modules/auth/auth.service.js'
+import { Inbox } from '../modules/inboxes/inbox.model.js'
+import mongoose from 'mongoose'
 
 let io: Server | null = null
 let pubClient: any = null
 let subClient: any = null
+let eventsSubClient: any = null
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -32,6 +35,19 @@ export async function initSocket(httpServer: HttpServer): Promise<Server> {
 
   io.adapter(createAdapter(pubClient, subClient))
 
+  eventsSubClient = pubClient.duplicate()
+  await eventsSubClient.subscribe('mailvault:socket-events')
+  eventsSubClient.on('message', (_channel: string, message: string) => {
+    try {
+      const event = JSON.parse(message)
+      if (typeof event.inboxId === 'string' && typeof event.event === 'string') {
+        io?.to(`inbox:${event.inboxId}`).emit(event.event, event.payload)
+      }
+    } catch (error) {
+      logger.warn({ err: error }, 'Ignored malformed realtime event')
+    }
+  })
+
   io.use(async (socket: AuthenticatedSocket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '')
@@ -54,15 +70,24 @@ export async function initSocket(httpServer: HttpServer): Promise<Server> {
 
     socket.join(`user:${socket.userId}`)
 
-    socket.on('join-inbox', (inboxId: string) => {
-      socket.join(`inbox:${inboxId}`)
+    socket.on('join:inbox', async (inboxId: string) => {
+      if (typeof inboxId !== 'string' || !mongoose.isValidObjectId(inboxId)) return
+      const ownsInbox = await Inbox.exists({ _id: inboxId, userId: socket.userId, isActive: true, expiresAt: { $gt: new Date() } })
+      if (!ownsInbox) {
+        socket.emit('error', { code: 'INBOX_NOT_FOUND' })
+        return
+      }
+      await socket.join(`inbox:${inboxId}`)
       logger.debug({ userId: socket.userId, inboxId }, 'Joined inbox room')
     })
 
-    socket.on('leave-inbox', (inboxId: string) => {
+    socket.on('leave:inbox', (inboxId: string) => {
       socket.leave(`inbox:${inboxId}`)
       logger.debug({ userId: socket.userId, inboxId }, 'Left inbox room')
     })
+
+    socket.on('join:user', () => socket.join(`user:${socket.userId}`))
+    socket.on('leave:user', () => socket.leave(`user:${socket.userId}`))
 
     socket.on('disconnect', (reason) => {
       logger.info({ userId: socket.userId, socketId: socket.id, reason }, 'Socket disconnected')

@@ -26,11 +26,13 @@ export interface OtpExtractedEvent {
     emailId: string
   }
 }
+export interface AICompletedEvent { emailId: string; status: string }
 
 type EmailNewHandler = (event: EmailNewEvent) => void
 type EmailReadHandler = (event: EmailReadEvent) => void
 type EmailDeletedHandler = (event: EmailDeletedEvent) => void
 type OtpExtractedHandler = (event: OtpExtractedEvent) => void
+type AICompletedHandler = (event: AICompletedEvent) => void
 
 interface UseSocketReturn {
   socket: Socket | null
@@ -39,6 +41,7 @@ interface UseSocketReturn {
   onEmailRead: (handler: EmailReadHandler) => () => void
   onEmailDeleted: (handler: EmailDeletedHandler) => () => void
   onOtpExtracted: (handler: OtpExtractedHandler) => () => void
+  onAICompleted: (handler: AICompletedHandler) => () => void
   joinInbox: (inboxId: string) => void
   leaveInbox: (inboxId: string) => void
   joinUser: () => void
@@ -54,7 +57,8 @@ export function useSocket(): UseSocketReturn {
   useEffect(() => {
     if (!accessToken) return
 
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+    const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/api\/v1\/?$/, '')
+    const newSocket = io(socketUrl, {
       auth: { token: accessToken },
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -121,6 +125,13 @@ export function useSocket(): UseSocketReturn {
     return () => s.off('otp.extracted', handler)
   }, [])
 
+  const onAICompleted = useCallback((handler: AICompletedHandler) => {
+    const s = socketRef.current
+    if (!s) return () => {}
+    s.on('ai.completed', handler)
+    return () => s.off('ai.completed', handler)
+  }, [])
+
   const joinInbox = useCallback((inboxId: string) => {
     socketRef.current?.emit('join:inbox', inboxId)
   }, [])
@@ -144,6 +155,7 @@ export function useSocket(): UseSocketReturn {
     onEmailRead,
     onEmailDeleted,
     onOtpExtracted,
+    onAICompleted,
     joinInbox,
     leaveInbox,
     joinUser,

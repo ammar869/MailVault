@@ -76,13 +76,15 @@ export const aiController = {
     try {
       const { emailId } = req.body
       const { Email } = await import('@mailvault/shared')
+      const { Inbox } = await import('@mailvault/shared')
 
       const email = await Email.findById(emailId).exec()
       if (!email) {
         return next(new AppError(404, 'EMAIL_NOT_FOUND', 'Email not found'))
       }
 
-      if (email.userId.toString() !== req.user!.userId) {
+      const inbox = await Inbox.findOne({ _id: email.inboxId, userId: req.user!.userId }).exec()
+      if (!inbox) {
         return next(new AppError(403, 'FORBIDDEN', 'Not authorized to reprocess this email'))
       }
 
@@ -97,8 +99,8 @@ export const aiController = {
         bodyHtml: email.htmlBody,
         hasAttachment: email.attachments.length > 0,
         otpCodes: email.otpCodes,
-        userId: email.userId,
-      })
+        userId: inbox.userId.toString(),
+      }, { jobId: `ai-reprocess-${email._id}-${Date.now()}`, attempts: 3, backoff: { type: 'exponential', delay: 1000 } })
 
       res.json({ data: null, meta: { message: 'AI reprocessing queued' } })
     } catch (error) {

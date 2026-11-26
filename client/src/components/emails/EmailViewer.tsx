@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, Paperclip, Copy, Check, ExternalLink, AlertCircle } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useAttachmentUrl } from '../../hooks/useQueries'
+import { api } from '../../lib/api'
 
 interface Attachment {
   id: string
@@ -36,6 +36,10 @@ interface EmailViewerProps {
     receivedAt: string
     inboxId: string
     otpCodes: string[]
+    aiSummary?: string | null
+    aiCategory?: string | null
+    riskScore?: number | null
+    riskFlags?: string[]
   }
   attachments: Attachment[]
   otpRecords: OtpRecord[]
@@ -75,7 +79,7 @@ export function EmailViewer({ email, attachments, otpRecords, onClose, onDelete,
 
   const handleDownload = async (attachment: Attachment) => {
     try {
-      const { data } = await useAttachmentUrl(email.id, attachment.id)
+      const { data } = await api.emails.getAttachmentUrl(email.id, attachment.id)
       if (data?.url) {
         const a = document.createElement('a')
         a.href = data.url
@@ -91,7 +95,7 @@ export function EmailViewer({ email, attachments, otpRecords, onClose, onDelete,
 
   const handleCopyUrl = async (attachment: Attachment) => {
     try {
-      const { data } = await useAttachmentUrl(email.id, attachment.id)
+      const { data } = await api.emails.getAttachmentUrl(email.id, attachment.id)
       if (data?.url) {
         await navigator.clipboard.writeText(data.url)
         setCopiedAttachmentId(attachment.id)
@@ -104,7 +108,7 @@ export function EmailViewer({ email, attachments, otpRecords, onClose, onDelete,
 
   const handleOpenInNewTab = async (attachment: Attachment) => {
     try {
-      const { data } = await useAttachmentUrl(email.id, attachment.id)
+      const { data } = await api.emails.getAttachmentUrl(email.id, attachment.id)
       if (data?.url) {
         window.open(data.url, '_blank', 'noopener,noreferrer')
       }
@@ -208,6 +212,22 @@ export function EmailViewer({ email, attachments, otpRecords, onClose, onDelete,
         </div>
       )}
 
+      {(email.aiSummary || email.aiCategory || email.riskScore !== null && email.riskScore !== undefined) && (
+        <section className="border-b border-violet-200 bg-violet-50 p-4" aria-label="AI email analysis">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <strong className="text-violet-900">AI analysis</strong>
+            {email.aiCategory && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">{email.aiCategory}</span>}
+            {email.riskScore !== null && email.riskScore !== undefined && (
+              <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', email.riskScore >= 60 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800')}>
+                Phishing risk: {email.riskScore}/100
+              </span>
+            )}
+          </div>
+          {email.aiSummary && <p className="text-sm text-violet-950">{email.aiSummary}</p>}
+          {!!email.riskFlags?.length && <p className="mt-2 text-xs text-red-800">{email.riskFlags.join(' · ')}</p>}
+        </section>
+      )}
+
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
         <nav className="flex -mb-px" aria-label="Email content tabs">
@@ -257,9 +277,12 @@ export function EmailViewer({ email, attachments, otpRecords, onClose, onDelete,
       <div className="flex-1 overflow-auto p-4">
         {activeTab === 'html' && email.bodyHtml && (
           <div className="prose prose-sm max-w-none">
-            <div
-              className="email-html-content"
-              dangerouslySetInnerHTML={{ __html: email.bodyHtml }}
+            <iframe
+              className="w-full min-h-[24rem] border-0"
+              title="Email HTML content"
+              sandbox=""
+              referrerPolicy="no-referrer"
+              srcDoc={`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:;"></head><body>${email.bodyHtml}</body></html>`}
             />
           </div>
         )}

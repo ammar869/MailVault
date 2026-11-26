@@ -2,6 +2,7 @@ import { AIResult } from './aiResult.model.js'
 import { Inbox } from '../inboxes/inbox.model.js'
 import { logger } from '../../utils/logger.js'
 import { env } from '../../config/env.js'
+import { z } from 'zod'
 
 interface LLMResponse {
   summary: string
@@ -39,11 +40,25 @@ Detected OTPs: {otpCodes}
 
 Return only valid JSON matching the schema.`
 
+const llmResultSchema = z.object({
+  summary: z.string().max(4000),
+  category: z.enum(['transactional', 'marketing', 'notification', 'personal', 'spam', 'security', 'finance', 'social', 'other']),
+  subCategory: z.string().max(120).default('other'),
+  links: z.array(z.string().url()).max(100).default([]),
+  phishingScore: z.number().min(0).max(100),
+  phishingReasons: z.array(z.string().max(300)).max(30).default([]),
+  tokensUsed: z.number().int().nonnegative().default(0),
+})
+
+function validateLLMResult(data: unknown): LLMResponse {
+  return llmResultSchema.parse(data)
+}
+
 class AIService {
   private async callLLM(prompt: string): Promise<LLMResponse> {
     if (!env.OPENAI_API_KEY && !env.ANTHROPIC_API_KEY) {
-      // Mock response for development
-      return this.mockResponse()
+      if (env.NODE_ENV === 'development') return this.mockResponse()
+      throw new Error('No LLM provider configured')
     }
 
     if (env.OPENAI_API_KEY) {
@@ -89,8 +104,7 @@ class AIService {
       throw new Error('Empty response from OpenAI')
     }
 
-    const parsed = JSON.parse(content)
-    return { ...parsed, tokensUsed }
+    return { ...validateLLMResult(JSON.parse(content)), tokensUsed }
   }
 
   private async callAnthropic(prompt: string): Promise<LLMResponse> {
@@ -123,8 +137,7 @@ class AIService {
       throw new Error('Empty response from Anthropic')
     }
 
-    const parsed = JSON.parse(content)
-    return { ...parsed, tokensUsed }
+    return { ...validateLLMResult(JSON.parse(content)), tokensUsed }
   }
 
   private mockResponse(): LLMResponse {
@@ -154,6 +167,20 @@ class AIService {
     const inbox = await Inbox.findById(email.inboxId).exec()
     if (!inbox || !inbox.aiEnabled) {
       logger.debug({ emailId: email._id }, 'AI disabled for inbox, skipping')
+      return
+    }
+
+    const currentTokens = await this.getTokenUsage(email.userId, 30)
+    if (currentTokens >= env.AI_MONTHLY_TOKEN_LIMIT) {
+      await AIResult.findOneAndUpdate(
+        { emailId: email._id },
+        { $set: {
+          emailId: email._id, inboxId: email.inboxId, userId: email.userId,
+          status: 'failed', error: 'AI usage limit reached for the current period',
+        } },
+        { upsert: true, new: true },
+      ).exec()
+      logger.warn({ userId: email.userId, currentTokens }, 'AI usage limit reached; skipping provider call')
       return
     }
 

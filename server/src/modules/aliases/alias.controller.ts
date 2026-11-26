@@ -58,6 +58,12 @@ export const aliasController = {
       if (error.message === 'ALIAS_NOT_FOUND') {
         return next(new AppError(404, 'ALIAS_NOT_FOUND', 'Alias not found'))
       }
+      if (error.message === 'TARGET_INBOX_NOT_FOUND') {
+        return next(new AppError(404, 'TARGET_INBOX_NOT_FOUND', 'Target inbox not found'))
+      }
+      if (error.message === 'FORBIDDEN') {
+        return next(new AppError(403, 'FORBIDDEN', 'Target inbox does not belong to user'))
+      }
       next(error)
     }
   },

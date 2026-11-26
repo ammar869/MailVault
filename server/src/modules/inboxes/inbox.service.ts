@@ -42,7 +42,7 @@ export const inboxService = {
   },
 
   async list(userId: string, query: ListInboxesQuery) {
-    const filter: Record<string, any> = { userId }
+    const filter: Record<string, any> = { userId, isActive: true, expiresAt: { $gt: new Date() } }
     if (query.type) filter.type = query.type
     if (query.isActive !== undefined) filter.isActive = query.isActive
 
@@ -62,6 +62,8 @@ export const inboxService = {
     const inbox = await Inbox.findOne({
       _id: inboxId,
       userId,
+      isActive: true,
+      expiresAt: { $gt: new Date() },
     }).exec()
 
     if (!inbox) {
@@ -73,7 +75,7 @@ export const inboxService = {
 
   async update(userId: string, inboxId: string, input: UpdateInboxInput) {
     const inbox = await Inbox.findOneAndUpdate(
-      { _id: inboxId, userId },
+      { _id: inboxId, userId, isActive: true, expiresAt: { $gt: new Date() } },
       { $set: input },
       { new: true, runValidators: true }
     ).exec()
@@ -101,7 +103,11 @@ export const inboxService = {
   },
 
   async findByAddress(address: string) {
-    return Inbox.findOne({ address: address.toLowerCase(), isActive: true }).exec()
+    return Inbox.findOne({ address: address.toLowerCase(), isActive: true, expiresAt: { $gt: new Date() } }).exec()
+  },
+
+  async findByIdForDelivery(inboxId: string) {
+    return Inbox.findOne({ _id: inboxId, isActive: true, expiresAt: { $gt: new Date() } }).exec()
   },
 
   async incrementMessageCount(inboxId: string) {

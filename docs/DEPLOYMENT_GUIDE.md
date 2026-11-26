@@ -27,9 +27,17 @@ S3_SECRET_KEY=<secret>
 LLM_API_KEY=<key>
 LLM_BASE_URL=https://api.example.com/v1
 WEBHOOK_SECRET_SES=<secret>
+SES_SNS_TOPIC_ARN=<expected-ses-notification-topic-arn>
 WEBHOOK_SECRET_MAILGUN=<secret>
 CLIENT_ORIGIN=http://localhost:5173
 ```
+
+Inbound endpoints are `/webhooks/inbound/ses` and `/webhooks/inbound/mailgun`.
+For SES, send notifications through SNS and set `SES_SNS_TOPIC_ARN`; the server verifies
+the SNS RSA signature and rejects unexpected topics. `WEBHOOK_SECRET_SES` is only for
+the direct signed adapter mode. For Mailgun, set the account's Webhook Signing Key;
+the route verifies the signed timestamp/token and accepts Mailgun's multipart form post.
+Raw accepted messages are retained in MongoDB for up to seven days while parsing jobs run.
 
 ## 2. Build Artifacts
 

@@ -1,18 +1,15 @@
 import { Inbox } from '@mailvault/shared'
 import { logger } from '@mailvault/shared'
-import { cleanupQueue } from '../index.js'
 import { deleteFromS3 } from '@mailvault/shared'
 import { Email } from '@mailvault/shared'
 import { Attachment } from '@mailvault/shared'
 import { OtpRecord } from '@mailvault/shared'
-import { Worker } from 'bullmq'
-import { env } from '@mailvault/shared'
-
-const ioredis = await import('ioredis')
-const RedisClient = ioredis.default || ioredis
-const connection = new (RedisClient as any)(env.REDIS_URL, { maxRetriesPerRequest: null })
+import { Alias } from '@mailvault/shared'
+import { publishRealtimeEvent } from '../utils/socket.js'
+import { connectDB } from '../config/database.js'
 
 export async function processExpireInboxJob(): Promise<void> {
+  await connectDB()
   const now = new Date()
   const expiredInboxes = await Inbox.find({
     expiresAt: { $lte: now },
@@ -22,6 +19,9 @@ export async function processExpireInboxJob(): Promise<void> {
   for (const inbox of expiredInboxes) {
     inbox.isActive = false
     await inbox.save()
+    await Email.updateMany({ inboxId: inbox._id, status: { $ne: 'deleted' } }, { $set: { status: 'deleted' } }).exec()
+    await Alias.updateMany({ targetInboxId: inbox._id, isActive: true }, { $set: { isActive: false } }).exec()
+    await publishRealtimeEvent(inbox._id.toString(), 'inbox.expired', { inboxId: inbox._id.toString() })
     logger.info({ inboxId: inbox._id }, 'Inbox expired and deactivated')
   }
 
@@ -29,6 +29,7 @@ export async function processExpireInboxJob(): Promise<void> {
 }
 
 export async function processPurgeEmailJob(): Promise<void> {
+  await connectDB()
   const purgeBefore = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days
 
   const deletedEmails = await Email.find({
@@ -43,6 +44,7 @@ export async function processPurgeEmailJob(): Promise<void> {
         await deleteFromS3(attachment.s3Bucket, attachment.s3Key)
       } catch (error) {
         logger.error({ err: error, attachmentId: attachment._id }, 'Failed to delete attachment from S3')
+        continue
       }
       await Attachment.findByIdAndDelete(attachment._id).exec()
     }
@@ -57,6 +59,7 @@ export async function processPurgeEmailJob(): Promise<void> {
 }
 
 export async function processOrphanAttachmentCleanupJob(): Promise<void> {
+  await connectDB()
   const attachments = await Attachment.find().exec()
   let cleaned = 0
 
@@ -67,6 +70,7 @@ export async function processOrphanAttachmentCleanupJob(): Promise<void> {
         await deleteFromS3(attachment.s3Bucket, attachment.s3Key)
       } catch (error) {
         logger.error({ err: error, attachmentId: attachment._id }, 'Failed to delete orphan attachment from S3')
+        continue
       }
       await Attachment.findByIdAndDelete(attachment._id).exec()
       cleaned++
@@ -77,22 +81,14 @@ export async function processOrphanAttachmentCleanupJob(): Promise<void> {
   logger.info({ count: cleaned }, 'Orphan attachment cleanup completed')
 }
 
-new Worker('cleanup', async (job) => {
-  logger.info({ jobId: job.id, name: job.name }, `Processing cleanup job: ${job.name}`)
-  
-  switch (job.name) {
-    case 'expireInbox':
-      await processExpireInboxJob()
-      break
-    case 'purgeEmail':
-      await processPurgeEmailJob()
-      break
-    case 'cleanupAttachments':
-      await processOrphanAttachmentCleanupJob()
-      break
-    default:
-      logger.warn({ jobName: job.name }, 'Unknown cleanup job')
+export async function processCleanupJob(name: string): Promise<void> {
+  logger.info({ name }, `Processing cleanup job: ${name}`)
+  switch (name) {
+    case 'expireInbox': return processExpireInboxJob()
+    case 'purgeEmail': return processPurgeEmailJob()
+    case 'cleanupAttachments': return processOrphanAttachmentCleanupJob()
+    default: logger.warn({ jobName: name }, 'Unknown cleanup job')
   }
-}, { connection, concurrency: 5 })
+}
 
-logger.info('Cleanup workers registered')
+logger.info('Cleanup job processors loaded')

@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger.js'
 export const aliasService = {
   async create(userId: string, input: any) {
     const targetInbox = await Inbox.findById(input.targetInboxId).exec()
-    if (!targetInbox) {
+    if (!targetInbox || !targetInbox.isActive || targetInbox.expiresAt <= new Date()) {
       throw new Error('TARGET_INBOX_NOT_FOUND')
     }
     if (targetInbox.userId.toString() !== userId) {
@@ -63,6 +63,13 @@ export const aliasService = {
   },
 
   async update(userId: string, aliasId: string, input: any) {
+    if (input.targetInboxId) {
+      const targetInbox = await Inbox.findById(input.targetInboxId).exec()
+      if (!targetInbox || !targetInbox.isActive || targetInbox.expiresAt <= new Date()) {
+        throw new Error('TARGET_INBOX_NOT_FOUND')
+      }
+      if (targetInbox.userId.toString() !== userId) throw new Error('FORBIDDEN')
+    }
     const alias = await Alias.findOneAndUpdate(
       { _id: aliasId, userId },
       { $set: input },

@@ -27,11 +27,11 @@ export function InboxDetailPage() {
   const [viewMode, setViewMode] = useState<'list' | 'split' | 'detail'>('split')
 
   const { data: emails, isLoading, refetch } = useEmails({ inboxId, limit: 50 })
-  const { data: emailData, isLoading: emailLoading } = useEmail(selectedEmail?.id || '')
+  const { data: emailData, isLoading: emailLoading, refetch: refetchEmail } = useEmail(selectedEmail?.id || '')
   const updateEmail = useUpdateEmail()
   const deleteEmail = useDeleteEmail()
 
-  const { isConnected, onEmailNew, joinInbox, leaveInbox, joinUser, leaveUser } = useSocket()
+  const { isConnected, onEmailNew, onAICompleted, joinInbox, leaveInbox, joinUser, leaveUser } = useSocket()
 
   // Socket.IO real-time integration
   useEffect(() => {
@@ -58,6 +58,10 @@ export function InboxDetailPage() {
     })
     return unsubscribe
   }, [onEmailNew, refetch, selectedEmail])
+
+  useEffect(() => onAICompleted((event) => {
+    if (event.emailId === selectedEmail?.id) refetchEmail()
+  }), [onAICompleted, refetchEmail, selectedEmail?.id])
 
   const handleEmailSelect = (email: any) => {
     setSelectedEmail(email)

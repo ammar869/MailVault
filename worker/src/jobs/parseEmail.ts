@@ -1,18 +1,20 @@
 import 'dotenv/config'
-import { simpleParser, ParsedMail, AddressObject, EmailAddress } from 'mailparser'
+import crypto from 'crypto'
+import { simpleParser, ParsedMail, AddressObject } from 'mailparser'
 import { connectDB } from '../config/database.js'
 import { emailService } from '../modules/emails/email.service.js'
-import { uploadToS3, generateS3Key } from '../utils/s3.js'
-import { extractOtpCodes, extractLinks } from '../utils/extract.js'
+import { uploadToS3 } from '../utils/s3.js'
+import { extractOtpCodes } from '../utils/extract.js'
 import { env } from '../config/env.js'
 import { logger } from '../utils/logger.js'
-import { emailParsingQueue } from '../index.js'
-import { aiQueue } from '../index.js'
+import { aiQueue } from '../queues.js'
+import { RawInboundMessage, Email, Inbox } from '@mailvault/shared'
 
 interface ParseEmailJobData {
   inboxId: string
   messageId: string
   rawMessageRef: string | null
+  rawInboundMessageId?: string
   provider: 'ses' | 'mailgun'
   recipient: string
   envelope: {
@@ -78,17 +80,18 @@ function parseAddresses(addresses: AddressObject | AddressObject[] | undefined):
   return result.filter(a => a.address)
 }
 
-async function processAttachments(parsed: ParsedMail, emailId: string): Promise<{ filename: string; mimeType: string; size: number; s3Key: string; s3Bucket: string }[]> {
+async function processAttachments(parsed: ParsedMail, objectPrefix: string): Promise<{ filename: string; mimeType: string; size: number; s3Key: string; s3Bucket: string }[]> {
   const attachments = parsed.attachments || []
-  const results = []
+  const results: { filename: string; mimeType: string; size: number; s3Key: string; s3Bucket: string }[] = []
 
   for (const attachment of attachments) {
     if (!attachment.content) continue
 
     const content = Buffer.isBuffer(attachment.content) ? attachment.content : Buffer.from(attachment.content)
-    const filename = attachment.filename || `attachment-${Date.now()}`
+    const filename: string = attachment.filename || `attachment-${results.length + 1}`
     const mimeType = attachment.contentType || 'application/octet-stream'
-    const s3Key = generateS3Key('attachments', filename)
+    const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 100)
+    const s3Key: string = `attachments/${objectPrefix}/${results.length}-${safeName}`
 
     await uploadToS3(s3Key, content, mimeType)
 
@@ -107,15 +110,28 @@ async function processAttachments(parsed: ParsedMail, emailId: string): Promise<
 export async function processParseEmailJob(jobData: ParseEmailJobData): Promise<void> {
   await connectDB()
 
-  const rawMessage = await fetchRawMessage(jobData.rawMessageRef, jobData.provider)
-  if (!rawMessage) {
-    logger.warn({ messageId: jobData.messageId }, 'No raw message content available')
+  const existingEmail = await Email.findOne({ inboxId: jobData.inboxId, messageId: jobData.messageId }).exec()
+  if (existingEmail) {
+    await enqueueAIJob(existingEmail)
+    logger.info({ messageId: jobData.messageId, inboxId: jobData.inboxId }, 'Email already parsed; ensured AI job is queued')
     return
+  }
+
+  let rawMessageRef = jobData.rawMessageRef
+  if (jobData.rawInboundMessageId) {
+    const raw = await RawInboundMessage.findById(jobData.rawInboundMessageId).exec()
+    if (!raw) throw new Error(`Raw inbound message ${jobData.rawInboundMessageId} is missing`)
+    rawMessageRef = raw.rawMessageRef || raw.rawContent
+  }
+
+  const rawMessage = await fetchRawMessage(rawMessageRef, jobData.provider)
+  if (!rawMessage) {
+    throw new Error(`Raw message content unavailable for ${jobData.messageId}`)
   }
 
   const parsed = await simpleParser(rawMessage)
 
-  const from = parsed.from ? { name: parsed.from.text || '', address: parsed.from.value?.[0]?.address || '' } : { name: '', address: jobData.envelope.from }
+  const from = parsed.from ? { name: parsed.from.text || '', address: parsed.from.value?.[0]?.address || '' } : { name: '', address: jobData.envelope.from || '' }
   const to = parseAddresses(parsed.to)
   const cc = parseAddresses(parsed.cc)
   const bcc = parseAddresses(parsed.bcc)
@@ -124,9 +140,10 @@ export async function processParseEmailJob(jobData: ParseEmailJobData): Promise<
   const htmlBody = parsed.html || ''
 
   const otpCodes = extractOtpCodes(textBody)
-  const links = extractLinks(textBody)
-
-  const attachments = await processAttachments(parsed, '')
+  const stablePrefix = crypto.createHash('sha256')
+    .update(jobData.rawInboundMessageId || `${jobData.inboxId}/${jobData.messageId}`)
+    .digest('hex').slice(0, 32)
+  const attachments = await processAttachments(parsed, stablePrefix)
 
   const email = await emailService.create({
     inboxId: jobData.inboxId,
@@ -142,23 +159,29 @@ export async function processParseEmailJob(jobData: ParseEmailJobData): Promise<
     size: rawMessage.length,
     attachments,
     otpCodes,
+    countInbox: false,
   })
 
-  // Enqueue AI processing job
-  await aiQueue.add('process-ai', {
-    emailId: email._id,
-    inboxId: jobData.inboxId,
-    from: from.address,
-    to: to.map(t => t.address),
-    subject: parsed.subject || '',
-    bodyText: textBody,
-    bodyHtml: htmlBody,
-    hasAttachment: attachments.length > 0,
-    otpCodes,
-    userId: email.userId,
-  })
+  await enqueueAIJob(email)
 
   logger.info({ messageId: jobData.messageId, inboxId: jobData.inboxId, otpCount: otpCodes.length }, 'Email parsed and stored')
+}
+
+async function enqueueAIJob(email: any): Promise<void> {
+  const inbox = await Inbox.findById(email.inboxId).select('userId').exec()
+  if (!inbox) return
+  await aiQueue.add('process-ai', {
+    emailId: email._id.toString(),
+    inboxId: email.inboxId.toString(),
+    from: email.from?.address || '',
+    to: (email.to || []).map((address: { address: string }) => address.address),
+    subject: email.subject || '',
+    bodyText: email.textBody || '',
+    bodyHtml: email.htmlBody || '',
+    hasAttachment: (email.attachments || []).length > 0,
+    otpCodes: email.otpCodes || [],
+    userId: inbox.userId.toString(),
+  }, { jobId: `ai-${email._id}`, attempts: 3, backoff: { type: 'exponential', delay: 1000 } })
 }
 
 logger.info('Email parsing worker registered')
