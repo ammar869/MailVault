@@ -15,6 +15,9 @@ async function scheduleMaintenanceJobs() {
     cleanupQueue.add('expireInbox', {}, { jobId: 'repeat-expire-inboxes', repeat: { every: 60_000 } }),
     cleanupQueue.add('purgeEmail', {}, { jobId: 'repeat-purge-emails', repeat: { every: 6 * 60 * 60_000 } }),
     cleanupQueue.add('cleanupAttachments', {}, { jobId: 'repeat-cleanup-attachments', repeat: { every: 24 * 60 * 60_000 } }),
+    webhookDeliveryQueue.add('deliver-pending', {}, { jobId: 'repeat-webhook-delivery', repeat: { every: 5_000 } }),
+    analyticsQueue.add('aggregate-daily', {}, { jobId: 'repeat-analytics-daily', repeat: { every: 24 * 60 * 60_000 } }),
+    analyticsQueue.add('cleanup-events', {}, { jobId: 'repeat-analytics-cleanup', repeat: { every: 7 * 24 * 60 * 60_000 } }),
   ])
 }
 
@@ -31,13 +34,13 @@ function createWorker(name: string, processor: (job: any) => Promise<void>, conc
 }
 
 createWorker('email-parsing', async (job) => {
-  logger.info({ jobId: job.id, data: job.data }, 'Processing email parsing job')
+  logger.info({ jobId: job.id }, 'Processing email parsing job')
   await processParseEmailJob(job.data)
 }, 5)
 
 createWorker('ai', async (job) => processAIJob(job.data), 3)
 
-createWorker('webhook-delivery', async () => processWebhookDeliveryJob(), 2)
+createWorker('webhook-delivery', async () => processWebhookDeliveryJob(), 1)
 
 createWorker('analytics', async (job) => processAnalyticsJob(job.name), 1)
 

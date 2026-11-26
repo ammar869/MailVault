@@ -1,6 +1,7 @@
 import { Alias } from './alias.model.js'
 import { Inbox } from '../inboxes/inbox.model.js'
 import { logger } from '../../utils/logger.js'
+import { auditService } from '../audit/audit.service.js'
 
 export const aliasService = {
   async create(userId: string, input: any) {
@@ -29,6 +30,7 @@ export const aliasService = {
     })
 
     logger.info({ aliasId: alias._id, userId, address }, 'Alias created')
+    await auditService.log({ userId, action: 'alias.created', resourceType: 'alias', resourceId: alias._id.toString(), metadata: { address, targetInboxId: input.targetInboxId } })
     return alias
   },
 
@@ -81,6 +83,7 @@ export const aliasService = {
     }
 
     logger.info({ aliasId, userId }, 'Alias updated')
+    await auditService.log({ userId, action: 'alias.updated', resourceType: 'alias', resourceId: alias._id.toString() })
     return alias
   },
 
@@ -95,6 +98,7 @@ export const aliasService = {
     }
 
     logger.info({ aliasId, userId }, 'Alias deleted')
+    await auditService.log({ userId, action: 'alias.deleted', resourceType: 'alias', resourceId: aliasId })
     return true
   },
 

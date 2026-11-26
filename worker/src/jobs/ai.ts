@@ -4,6 +4,7 @@ import { aiService } from '@mailvault/shared'
 import { logger } from '../utils/logger.js'
 import { AIResult } from '@mailvault/shared'
 import { publishRealtimeEvent } from '../utils/socket.js'
+import { analyticsService } from '@mailvault/shared'
 
 interface AIJobData {
   emailId: string
@@ -38,6 +39,11 @@ export async function processAIJob(jobData: AIJobData): Promise<void> {
 
   const result = await AIResult.findOne({ emailId: jobData.emailId }).lean().exec()
   if (result) {
+    if (result.status === 'completed') {
+      await analyticsService.recordEvent(jobData.userId, jobData.inboxId, 'ai.completed', { emailId: jobData.emailId, tokensUsed: result.tokensUsed || 0 })
+      await analyticsService.incrementDailyStat(jobData.userId, jobData.inboxId, 'aiProcessed')
+      await analyticsService.incrementDailyStat(jobData.userId, jobData.inboxId, 'aiTokensUsed', result.tokensUsed || 0)
+    }
     await publishRealtimeEvent(jobData.inboxId, 'ai.completed', {
       emailId: jobData.emailId,
       status: result.status,

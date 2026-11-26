@@ -2,6 +2,7 @@ import { WebhookDelivery } from './webhookDelivery.model.js'
 import { OutgoingWebhook } from './outgoingWebhook.model.js'
 import { logger } from '../../utils/logger.js'
 import { createHmac } from 'crypto'
+import { analyticsService } from '../analytics/analytics.service.js'
 
 interface DeliveryResult {
   success: boolean
@@ -11,8 +12,8 @@ interface DeliveryResult {
 }
 
 export const webhookDeliveryService = {
-  generateIdempotencyKey(eventType: string, resourceId: string): string {
-    return `wh_${eventType}_${resourceId}_${Date.now()}`
+  generateIdempotencyKey(eventType: string, resourceId: string, webhookId = 'default'): string {
+    return `wh_${eventType}_${resourceId}_${webhookId}`
   },
 
   signPayload(payload: string, secret: string): string {
@@ -20,21 +21,14 @@ export const webhookDeliveryService = {
   },
 
   async scheduleDelivery(webhook: any, eventType: string, payload: any, idempotencyKey: string): Promise<void> {
-    const existing = await WebhookDelivery.findOne({ idempotencyKey }).exec()
-    if (existing) {
-      logger.debug({ idempotencyKey }, 'Webhook delivery already scheduled')
-      return
-    }
-
-    await WebhookDelivery.create({
-      webhookId: webhook._id,
-      eventType,
-      payload,
-      idempotencyKey,
-      attempt: 1,
-      status: 'pending',
-      nextRetryAt: new Date(),
-    })
+    await WebhookDelivery.findOneAndUpdate(
+      { idempotencyKey },
+      { $setOnInsert: {
+        webhookId: webhook._id, eventType, payload, idempotencyKey,
+        attempt: 1, status: 'pending', nextRetryAt: new Date(),
+      } },
+      { upsert: true, new: true },
+    ).exec()
 
     logger.info({ webhookId: webhook._id, eventType, idempotencyKey }, 'Webhook delivery scheduled')
   },
@@ -64,14 +58,15 @@ export const webhookDeliveryService = {
       const response = await fetch(webhook.url, {
         method: 'POST',
         headers: {
+          ...webhook.headers,
           'Content-Type': 'application/json',
           'X-Webhook-Signature': `sha256=${signature}`,
           'X-Webhook-Event': delivery.eventType,
           'X-Webhook-Delivery': delivery.idempotencyKey,
           'User-Agent': 'MailVault-Webhook/1.0',
-          ...webhook.headers,
         },
         body: payloadStr,
+        signal: AbortSignal.timeout(10_000),
       })
 
       const responseBody = await response.text().catch(() => '')
@@ -85,6 +80,12 @@ export const webhookDeliveryService = {
         delivery.deliveredAt = new Date()
         delivery.nextRetryAt = null
         await delivery.save()
+        const userId = webhook.userId?.toString()
+        const inboxId = delivery.payload?.email?.inboxId?.toString() || null
+        if (userId) {
+          await analyticsService.recordEvent(userId, inboxId, 'webhook.delivered', { deliveryId, webhookId: webhook._id })
+          await analyticsService.incrementDailyStat(userId, inboxId, 'webhooksDelivered')
+        }
         logger.info({ deliveryId, webhookId: webhook._id }, 'Webhook delivered successfully')
         return { success: true, statusCode: response.status, body: responseBody }
       } else {
@@ -97,6 +98,12 @@ export const webhookDeliveryService = {
         delivery.status = 'failed'
         delivery.nextRetryAt = null
         await delivery.save()
+        const userId = webhook.userId?.toString()
+        const inboxId = delivery.payload?.email?.inboxId?.toString() || null
+        if (userId) {
+          await analyticsService.recordEvent(userId, inboxId, 'webhook.failed', { deliveryId, webhookId: webhook._id })
+          await analyticsService.incrementDailyStat(userId, inboxId, 'webhooksFailed')
+        }
         logger.error({ deliveryId, webhookId: webhook._id, error: error.message }, 'Webhook delivery failed permanently')
         return { success: false, error: error.message }
       }

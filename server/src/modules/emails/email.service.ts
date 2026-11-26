@@ -6,6 +6,7 @@ import { AppError } from '../../middleware/errorHandler.js'
 import { logger } from '../../utils/logger.js'
 import { emitEmailNew, emitOtpExtracted, emitEmailRead, emitEmailDeleted } from '../../utils/socket.js'
 import { AIResult } from '@mailvault/shared'
+import { analyticsService } from '@mailvault/shared'
 import type { ListEmailsQuery, UpdateEmailInput } from './email.schema.js'
 
 export const emailService = {
@@ -199,6 +200,8 @@ export const emailService = {
 
     if (input.status === 'read' && email.status !== 'read') {
       emitEmailRead(email.inboxId.toString(), emailId)
+      await analyticsService.recordEvent(inbox.userId.toString(), email.inboxId.toString(), 'email.read', { emailId })
+      await analyticsService.incrementDailyStat(inbox.userId.toString(), email.inboxId.toString(), 'emailsRead')
     }
 
     return updated
@@ -217,6 +220,8 @@ export const emailService = {
 
     await Email.findByIdAndUpdate(emailId, { $set: { status: 'deleted' } }).exec()
     await OtpRecord.deleteMany({ emailId }).exec()
+    await analyticsService.recordEvent(inbox.userId.toString(), email.inboxId.toString(), 'email.deleted', { emailId })
+    await analyticsService.incrementDailyStat(inbox.userId.toString(), email.inboxId.toString(), 'emailsDeleted')
 
     logger.info({ emailId, userId }, 'Email soft-deleted')
     emitEmailDeleted(email.inboxId.toString(), emailId)

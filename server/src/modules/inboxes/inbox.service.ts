@@ -1,5 +1,6 @@
 import { Inbox } from './inbox.model.js'
 import { AppError } from '../../middleware/errorHandler.js'
+import { auditService } from '@mailvault/shared'
 import { logger } from '../../utils/logger.js'
 import type { CreateInboxInput, UpdateInboxInput, ListInboxesQuery } from './inbox.schema.js'
 
@@ -37,7 +38,8 @@ export const inboxService = {
       settings: input.settings || {},
     })
 
-    logger.info({ inboxId: inbox._id, userId, address }, 'Inbox created')
+    logger.info({ inboxId: inbox._id, userId }, 'Inbox created')
+    await auditService.log({ userId, action: 'inbox.created', resourceType: 'inbox', resourceId: inbox._id.toString(), metadata: { address, type: inbox.type } })
     return inbox
   },
 
@@ -85,6 +87,7 @@ export const inboxService = {
     }
 
     logger.info({ inboxId, userId }, 'Inbox updated')
+    await auditService.log({ userId, action: 'inbox.updated', resourceType: 'inbox', resourceId: inbox._id.toString() })
     return inbox
   },
 
@@ -99,6 +102,7 @@ export const inboxService = {
     }
 
     logger.info({ inboxId, userId }, 'Inbox deleted')
+    await auditService.log({ userId, action: 'inbox.deleted', resourceType: 'inbox', resourceId: inbox._id.toString() })
     return true
   },
 

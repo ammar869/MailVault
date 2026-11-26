@@ -86,13 +86,18 @@ export const emailService = {
     logger.info({ emailId: email._id, inboxId: data.inboxId, messageId: data.messageId }, 'Email created')
 
     // Trigger webhook deliveries
-    const webhooks = await OutgoingWebhook.find({ events: 'email.new', isActive: true }).exec()
+    const ownerInbox = await Inbox.findById(data.inboxId).select('userId').exec()
+    const ownerId = ownerInbox?.userId.toString()
+    const webhooks = ownerId
+      ? await OutgoingWebhook.find({ userId: ownerId, events: 'email.new', isActive: true }).exec()
+      : []
     for (const webhook of webhooks) {
       const payload = {
         event: 'email.new',
         timestamp: new Date().toISOString(),
         email: {
           id: email._id,
+          inboxId: data.inboxId,
           messageId: email.messageId,
           from: email.from,
           to: email.to,
@@ -102,26 +107,28 @@ export const emailService = {
           otpCodes: email.otpCodes,
         },
       }
-      const idempotencyKey = webhookDeliveryService.generateIdempotencyKey('email.new', email._id.toString())
+      const idempotencyKey = webhookDeliveryService.generateIdempotencyKey('email.new', email._id.toString(), webhook._id.toString())
       await webhookDeliveryService.scheduleDelivery(webhook, 'email.new', payload, idempotencyKey)
     }
 
     // Record analytics events
-    await analyticsService.recordEvent(data.inboxId, data.inboxId, 'email.received', {
+    if (ownerId) await analyticsService.recordEvent(ownerId, data.inboxId, 'email.received', {
       emailId: email._id,
       messageId: data.messageId,
       hasAttachment: data.attachments.length > 0,
+      attachmentCount: data.attachments.length,
+      attachmentSize: data.attachments.reduce((sum, attachment) => sum + attachment.size, 0),
       otpCount: data.otpCodes.length,
     })
 
     // Increment daily stats
-    await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'emailsReceived')
-    if (data.attachments.length > 0) {
-      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'attachmentsReceived', data.attachments.length)
-      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'totalAttachmentSize', data.attachments.reduce((sum, a) => sum + a.size, 0))
+    if (ownerId) await analyticsService.incrementDailyStat(ownerId, data.inboxId, 'emailsReceived')
+    if (ownerId && data.attachments.length > 0) {
+      await analyticsService.incrementDailyStat(ownerId, data.inboxId, 'attachmentsReceived', data.attachments.length)
+      await analyticsService.incrementDailyStat(ownerId, data.inboxId, 'totalAttachmentSize', data.attachments.reduce((sum, a) => sum + a.size, 0))
     }
-    if (data.otpCodes.length > 0) {
-      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'otpCodesExtracted', data.otpCodes.length)
+    if (ownerId && data.otpCodes.length > 0) {
+      await analyticsService.incrementDailyStat(ownerId, data.inboxId, 'otpCodesExtracted', data.otpCodes.length)
     }
 
     return email

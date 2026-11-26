@@ -196,7 +196,7 @@ export const inboundWebhookService = {
       const resolved = await resolveInboxForRecipient(recipient)
       const inbox = resolved?.inbox
       if (!inbox) {
-        logger.warn({ recipient }, 'Inbox not found for recipient')
+        logger.warn('No active inbox mapped to inbound recipient')
         continue
       }
 
@@ -263,7 +263,7 @@ export const inboundWebhookService = {
     const resolved = await resolveInboxForRecipient(recipient)
     const inbox = resolved?.inbox
     if (!inbox) {
-      logger.warn({ recipient }, 'Inbox not found for recipient')
+      logger.warn('No active inbox mapped to inbound recipient')
       return []
     }
 
