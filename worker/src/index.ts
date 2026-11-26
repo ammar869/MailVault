@@ -4,6 +4,8 @@ import { env, logger } from '@mailvault/shared'
 import { processParseEmailJob } from './jobs/parseEmail.js'
 import './jobs/ai.js'
 import './jobs/cleanup.js'
+import './jobs/webhookDelivery.js'
+import './jobs/analytics.js'
 
 const ioredis = await import('ioredis')
 const RedisClient = ioredis.default || ioredis

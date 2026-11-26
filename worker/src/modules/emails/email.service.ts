@@ -1,6 +1,10 @@
 import { Email } from '@mailvault/shared'
 import { Attachment } from '@mailvault/shared'
 import { OtpRecord } from '@mailvault/shared'
+import { Inbox } from '@mailvault/shared'
+import { OutgoingWebhook } from '@mailvault/shared'
+import { analyticsService } from '@mailvault/shared'
+import { webhookDeliveryService } from '@mailvault/shared'
 import { inboxService } from '../inboxes/inbox.service.js'
 import { logger } from '../../utils/logger.js'
 
@@ -66,6 +70,46 @@ export const emailService = {
     await inboxService.incrementMessageCount(data.inboxId)
 
     logger.info({ emailId: email._id, inboxId: data.inboxId, messageId: data.messageId }, 'Email created')
+
+    // Trigger webhook deliveries
+    const webhooks = await OutgoingWebhook.find({ events: 'email.new', isActive: true }).exec()
+    for (const webhook of webhooks) {
+      const payload = {
+        event: 'email.new',
+        timestamp: new Date().toISOString(),
+        email: {
+          id: email._id,
+          messageId: email.messageId,
+          from: email.from,
+          to: email.to,
+          subject: email.subject,
+          receivedAt: email.receivedAt,
+          hasAttachment: email.attachments.length > 0,
+          otpCodes: email.otpCodes,
+        },
+      }
+      const idempotencyKey = webhookDeliveryService.generateIdempotencyKey('email.new', email._id.toString())
+      await webhookDeliveryService.scheduleDelivery(webhook, 'email.new', payload, idempotencyKey)
+    }
+
+    // Record analytics events
+    await analyticsService.recordEvent(data.inboxId, data.inboxId, 'email.received', {
+      emailId: email._id,
+      messageId: data.messageId,
+      hasAttachment: data.attachments.length > 0,
+      otpCount: data.otpCodes.length,
+    })
+
+    // Increment daily stats
+    await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'emailsReceived')
+    if (data.attachments.length > 0) {
+      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'attachmentsReceived', data.attachments.length)
+      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'totalAttachmentSize', data.attachments.reduce((sum, a) => sum + a.size, 0))
+    }
+    if (data.otpCodes.length > 0) {
+      await analyticsService.incrementDailyStat(data.inboxId, data.inboxId, 'otpCodesExtracted', data.otpCodes.length)
+    }
+
     return email
   },
 }
