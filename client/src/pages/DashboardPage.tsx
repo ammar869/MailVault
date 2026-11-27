@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Plus, Mail, Trash2, Clock, AlertCircle, CheckCircle } from 'lucide-react'
+import { Plus, Mail, Trash2, Clock, CheckCircle } from 'lucide-react'
 import { useInboxes, useCreateInbox, useDeleteInbox } from '../hooks/useQueries'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
 import { clsx } from 'clsx'
+import { Link } from 'react-router-dom'
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -30,8 +29,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export function DashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newInboxData, setNewInboxData] = useState({ localPart: '', domain: '', capacity: 100, ttlDays: 7 })
-  const [selectedDomain, setSelectedDomain] = useState('')
+  const [newInboxData, setNewInboxData] = useState({ localPart: '', domain: 'mailvault.app', capacity: 100, ttlDays: 7 })
 
   const { data: inboxes, isLoading, error, refetch } = useInboxes()
   const createInbox = useCreateInbox()
@@ -48,7 +46,7 @@ export function DashboardPage() {
       {
         onSuccess: () => {
           setShowCreateModal(false)
-          setNewInboxData({ localPart: '', domain: '', capacity: 100, ttlDays: 7 })
+          setNewInboxData({ localPart: '', domain: 'mailvault.app', capacity: 100, ttlDays: 7 })
           refetch()
         },
       }
@@ -89,6 +87,10 @@ export function DashboardPage() {
             </div>
           ))}
         </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-800" role="alert">
+          Could not load your inboxes: {error.message}
+        </div>
       ) : inboxes?.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <Mail className="mx-auto h-16 w-16 text-gray-300 mb-4" />
@@ -112,7 +114,7 @@ export function DashboardPage() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{inbox.address}</p>
-                    <p className="text-sm text-gray-500">{inbox.capacity} emails • {inbox.ttlDays} days TTL</p>
+                  <p className="text-sm text-gray-500">{inbox.capacity} emails • {inbox.ttlDays} days TTL</p>
                   </div>
                 </div>
                 <StatusBadge status={inbox.isActive ? 'new' : 'deleted'} />
@@ -130,12 +132,12 @@ export function DashboardPage() {
               </div>
 
               <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
-                <a
-                  href={`/inboxes/${inbox._id}`}
+                <Link
+                  to={`/inboxes/${inbox._id}`}
                   className="flex-1 btn-secondary text-center"
                 >
                   Open Inbox
-                </a>
+                </Link>
                 <button
                   onClick={() => handleDeleteInbox(inbox._id)}
                   disabled={deleteInbox.isPending}
@@ -175,9 +177,7 @@ export function DashboardPage() {
                     className="input-field w-48"
                     required
                   >
-                    {domains.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
+                    {domains.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
               </div>

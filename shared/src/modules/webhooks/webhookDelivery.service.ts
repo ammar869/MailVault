@@ -3,6 +3,7 @@ import { OutgoingWebhook } from './outgoingWebhook.model.js'
 import { logger } from '../../utils/logger.js'
 import { createHmac } from 'crypto'
 import { analyticsService } from '../analytics/analytics.service.js'
+import { validateWebhookDestination } from './outgoingWebhook.service.js'
 
 interface DeliveryResult {
   success: boolean
@@ -55,6 +56,7 @@ export const webhookDeliveryService = {
     const signature = this.signPayload(payloadStr, webhook.secret)
 
     try {
+      await validateWebhookDestination(webhook.url)
       const response = await fetch(webhook.url, {
         method: 'POST',
         headers: {
@@ -66,6 +68,7 @@ export const webhookDeliveryService = {
           'User-Agent': 'MailVault-Webhook/1.0',
         },
         body: payloadStr,
+        redirect: 'error',
         signal: AbortSignal.timeout(10_000),
       })
 

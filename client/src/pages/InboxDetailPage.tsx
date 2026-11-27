@@ -3,22 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEmails, useEmail, useUpdateEmail, useDeleteEmail } from '../hooks/useQueries'
 import { useSocket } from '../hooks/useSocket'
 import { EmailList, EmailViewer, OtpDisplay } from '../components/emails'
-import { Mail, ArrowLeft, RefreshCw, Trash2, Clock, AlertCircle, CheckCircle } from 'lucide-react'
+import { Mail, ArrowLeft, RefreshCw, AlertCircle, CheckCircle, LayoutList, LayoutPanelLeft } from 'lucide-react'
 import { clsx } from 'clsx'
-
-function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    new: 'bg-blue-100 text-blue-800',
-    read: 'bg-gray-100 text-gray-600',
-    archived: 'bg-green-100 text-green-800',
-    deleted: 'bg-red-100 text-red-800',
-  }
-  return (
-    <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-600')}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
-}
 
 export function InboxDetailPage() {
   const { inboxId } = useParams()
@@ -48,7 +34,7 @@ export function InboxDetailPage() {
   }, [inboxId, joinInbox, leaveInbox, joinUser, leaveUser])
 
   useEffect(() => {
-    const unsubscribe = onEmailNew((event) => {
+  const unsubscribe = onEmailNew(() => {
       // New email received - refetch list
       refetch()
       // Optionally auto-select if in list view
@@ -103,8 +89,6 @@ export function InboxDetailPage() {
 
   if (!inboxId) return null
 
-  const inboxAddress = emails?.[0]?.inboxId // We'd need to fetch inbox separately for address
-
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
       {/* Header */}
@@ -122,6 +106,15 @@ export function InboxDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === 'list' ? 'split' : 'list')}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            aria-label={viewMode === 'list' ? 'Show email viewer' : 'Show email list only'}
+            title={viewMode === 'list' ? 'Show email viewer' : 'Show email list only'}
+          >
+            {viewMode === 'list' ? <LayoutPanelLeft className="h-5 w-5" /> : <LayoutList className="h-5 w-5" />}
+          </button>
           <div className={clsx('flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium', isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')}>
             {isConnected ? (
               <>

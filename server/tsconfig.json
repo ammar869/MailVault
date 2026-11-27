@@ -18,10 +18,9 @@
     "composite": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@mailvault/shared/*": ["../shared/src/*"]
+      "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "src/types/**/*", "../shared/src/types/**/*"],
+  "include": ["src/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist"]
 }

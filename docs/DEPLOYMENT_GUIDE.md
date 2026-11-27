@@ -2,11 +2,11 @@
 
 ## 1. Local Development (without Docker)
 
-Install Node dependencies with `npm install`. Start MongoDB and Redis as local
-services, set their local connection URLs in `.env`, then run `npm run dev:server`,
-`npm run dev:worker`, and `npm run dev:client` in separate terminals. The client is
-available at `http://localhost:5173`. The UI can start without MongoDB or Redis,
-but API-backed features need both services.
+Install Node dependencies with `npm install`. Start MongoDB as a local service and
+set `MONGODB_URI` plus the JWT secrets in `.env`; then run `npm run dev:server` and
+`npm run dev:client` in separate terminals. The client is available at
+`http://localhost:5173`. Redis is required for the worker, queues and realtime
+features; set `REDIS_URL` and run `npm run dev:worker` when Redis is available.
 
 Environment variables (`.env`, gitignored):
 ```
@@ -35,7 +35,10 @@ the direct signed adapter mode. For Mailgun, set the account's Webhook Signing K
 the route verifies the signed timestamp/token and accepts Mailgun's multipart form post.
 Raw accepted messages are retained in MongoDB for up to seven days while parsing jobs run.
 
-## 2. Build Artifacts
+## 2. Docker Artifacts (disabled for now)
+
+Docker Compose is commented out under `infrastructure/docker-compose.yml` per the
+current local development setup. The Dockerfiles remain as reference artifacts.
 
 - `Dockerfile.client` — Vite build → Nginx static serve.
 - `Dockerfile.server` — Node production, runs Express API.
@@ -59,8 +62,8 @@ Raw accepted messages are retained in MongoDB for up to seven days while parsing
 | Variable | Dev | Prod |
 |---|---|---|
 | S3 | MinIO local | Amazon S3 |
-| MongoDB | Docker local | Atlas / self-hosted |
-| Redis | Docker local | ElastiCache / self-hosted |
+| MongoDB | Local service | Atlas / self-hosted |
+| Redis | Local service | ElastiCache / self-hosted |
 | Inbound provider | SES sandbox / Mailgun test | SES production / Mailgun |
 | TLS | none / self-signed | managed certs |
 
@@ -72,7 +75,7 @@ Raw accepted messages are retained in MongoDB for up to seven days while parsing
 
 ## 6. Checklist
 
-- [ ] Docker Compose stack starts with one command
+- [x] Docker disabled for local development
 - [ ] `/health` returns 200
 - [ ] Secrets not in repo
 - [ ] S3 bucket private

@@ -1,12 +1,16 @@
 import { Inbox } from '@mailvault/shared'
 import { logger } from '@mailvault/shared'
-import { deleteFromS3 } from '@mailvault/shared'
 import { Email } from '@mailvault/shared'
 import { Attachment } from '@mailvault/shared'
 import { OtpRecord } from '@mailvault/shared'
 import { Alias } from '@mailvault/shared'
 import { publishRealtimeEvent } from '../utils/socket.js'
 import { connectDB } from '../config/database.js'
+
+async function deleteAttachmentObject(bucket: string, key: string) {
+  const { deleteFromS3 } = await import('../utils/s3.js')
+  await deleteFromS3(bucket, key)
+}
 
 export async function processExpireInboxJob(): Promise<void> {
   await connectDB()
@@ -41,7 +45,7 @@ export async function processPurgeEmailJob(): Promise<void> {
     const attachments = await Attachment.find({ emailId: email._id }).exec()
     for (const attachment of attachments) {
       try {
-        await deleteFromS3(attachment.s3Bucket, attachment.s3Key)
+        await deleteAttachmentObject(attachment.s3Bucket, attachment.s3Key)
       } catch (error) {
         logger.error({ err: error, attachmentId: attachment._id }, 'Failed to delete attachment from S3')
         continue
@@ -67,7 +71,7 @@ export async function processOrphanAttachmentCleanupJob(): Promise<void> {
     const email = await Email.findById(attachment.emailId).exec()
     if (!email) {
       try {
-        await deleteFromS3(attachment.s3Bucket, attachment.s3Key)
+        await deleteAttachmentObject(attachment.s3Bucket, attachment.s3Key)
       } catch (error) {
         logger.error({ err: error, attachmentId: attachment._id }, 'Failed to delete orphan attachment from S3')
         continue

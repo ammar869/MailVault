@@ -1,3 +1,5 @@
+import { useAuthStore } from '../stores/authStore'
+
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 function apiUrl(path: string) {
@@ -5,15 +7,48 @@ function apiUrl(path: string) {
   return `${prefix}${path}`
 }
 
+let refreshInFlight: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  const currentAuth = useAuthStore.getState()
+  if (!currentAuth.isAuthenticated || !currentAuth.accessToken) return null
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(apiUrl('/auth/refresh'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    }).then(async (response) => {
+      if (!response.ok) return null
+      const body = await response.json() as { data?: { accessToken?: string } }
+      const token = body.data?.accessToken
+      const latest = useAuthStore.getState()
+      if (!token || !latest.user) return null
+      latest.setAuth(latest.user, token)
+      return token
+    }).catch(() => null).finally(() => {
+      refreshInFlight = null
+    })
+  }
+  const token = await refreshInFlight
+  if (!token) useAuthStore.getState().clearAuth()
+  return token
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    credentials: 'include',
-  })
+  const send = (token: string | null) => fetch(apiUrl(path), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+      credentials: 'include',
+    })
+  let res = await send(useAuthStore.getState().accessToken)
+  if (res.status === 401 && !['/auth/refresh', '/auth/login', '/auth/register'].includes(path)) {
+    const token = await refreshAccessToken()
+    if (token) res = await send(token)
+  }
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: 'Request failed' }))
@@ -43,6 +78,12 @@ export const api = {
       request<void>('/auth/logout', { method: 'POST' }),
     me: () =>
       request<{ data: { user: any } }>('/auth/me').then((response) => response.data),
+    updateProfile: (name: string) =>
+      request<{ data: { user: any } }>('/auth/me', { method: 'PATCH', body: JSON.stringify({ name }) }).then((response) => response.data),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<void>('/auth/password', { method: 'PATCH', body: JSON.stringify({ currentPassword, newPassword }) }),
+    revokeSessions: () =>
+      request<void>('/auth/sessions/revoke', { method: 'POST' }),
     refresh: () =>
       request<{ data: { accessToken: string } }>('/auth/refresh', { method: 'POST' }).then((response) => response.data),
   },
@@ -59,14 +100,14 @@ export const api = {
       request<{ data: any }>('/inboxes', {
         method: 'POST',
         body: JSON.stringify({ localPart, domain, capacity, ttlDays }),
-      }),
+      }).then((response) => response.data),
     get: (id: string) =>
-      request<{ data: any }>(`/inboxes/${id}`),
+      request<{ data: any }>(`/inboxes/${id}`).then((response) => response.data),
     update: (id: string, data: { capacity?: number; ttlDays?: number; isActive?: boolean }) =>
       request<{ data: any }>(`/inboxes/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-      }),
+      }).then((response) => response.data),
     delete: (id: string) =>
       request<void>(`/inboxes/${id}`, { method: 'DELETE' }),
   },
@@ -84,16 +125,32 @@ export const api = {
       request<{ data: any }>('/aliases', {
         method: 'POST',
         body: JSON.stringify({ localPart, domain, targetInboxId, expiresAt, isActive }),
-      }),
+      }).then((response) => response.data),
     get: (id: string) =>
-      request<{ data: any }>(`/aliases/${id}`),
+      request<{ data: any }>(`/aliases/${id}`).then((response) => response.data),
     update: (id: string, data: { targetInboxId?: string; isActive?: boolean; expiresAt?: string | null }) =>
       request<{ data: any }>(`/aliases/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-      }),
+      }).then((response) => response.data),
     delete: (id: string) =>
       request<void>(`/aliases/${id}`, { method: 'DELETE' }),
+  },
+
+  apiKeys: {
+    list: () => request<{ data: any[]; meta: any }>('/api-keys'),
+    create: (name: string, scopes: string[]) =>
+      request<{ data: any }>('/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes }) })
+        .then((response) => response.data),
+    delete: (id: string) => request<void>(`/api-keys/${id}`, { method: 'DELETE' }),
+  },
+
+  webhooks: {
+    list: () => request<{ data: any[]; meta: any }>('/webhooks'),
+    create: (name: string, url: string, events: string[]) =>
+      request<{ data: any }>('/webhooks', { method: 'POST', body: JSON.stringify({ name, url, events }) })
+        .then((response) => response.data),
+    delete: (id: string) => request<void>(`/webhooks/${id}`, { method: 'DELETE' }),
   },
 
   emails: {
@@ -125,12 +182,12 @@ export const api = {
       return request<{ data: any[]; meta: any }>(`/emails?${search}`)
     },
     get: (id: string) =>
-      request<{ data: { email: any; attachments: any[]; otpRecords: any[] } }>(`/emails/${id}`),
+      request<{ data: { email: any; attachments: any[]; otpRecords: any[] } }>(`/emails/${id}`).then((response) => response.data),
     update: (id: string, status: string) =>
       request<{ data: any }>(`/emails/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
-      }),
+      }).then((response) => response.data),
     delete: (id: string) =>
       request<void>(`/emails/${id}`, { method: 'DELETE' }),
     getAttachmentUrl: (emailId: string, attachmentId: string) =>

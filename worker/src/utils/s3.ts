@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from '../config/env.js'
 import { logger } from './logger.js'
@@ -53,4 +53,9 @@ export async function ensureBucketExists(bucket: string = env.S3_BUCKET): Promis
       logger.error({ err: error, bucket }, 'Failed to ensure bucket exists')
     }
   }
+}
+
+export async function deleteFromS3(bucket: string, key: string): Promise<void> {
+  await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+  logger.debug({ key, bucket }, 'Deleted from S3')
 }

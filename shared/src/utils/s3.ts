@@ -34,7 +34,7 @@ export async function getPresignedUrl(
   expiresIn: number = 300
 ): Promise<string> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key })
-  return getSignedUrl(s3Client, command, { expiresIn })
+  return getSignedUrl(s3Client as any, command as any, { expiresIn })
 }
 
 export function generateS3Key(prefix: string, filename: string): string {

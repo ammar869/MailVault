@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "predev": "npm run build --workspace=@mailvault/shared",
+    "dev": "node --require ./dev-preload.cjs ../node_modules/tsx/dist/cli.mjs watch src/index.ts",
+    "prebuild": "npm run build --workspace=@mailvault/shared",
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext ts --report-unused-disable-directives --max-warnings 0",

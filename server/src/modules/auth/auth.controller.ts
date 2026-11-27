@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express'
-import { register, login, refreshTokens, getMe } from './auth.service.js'
+import { register, login, refreshTokens, getMe, updateProfile, changePassword, revokeAllSessions } from './auth.service.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import { AuthRequest } from '../../middleware/authenticate.js'
+import { getIO } from '../../utils/socket.js'
+
+function disconnectUserSockets(userId: string) {
+  getIO()?.in(`user:${userId}`).disconnectSockets(true)
+}
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -48,7 +53,7 @@ export const authController = {
 
   refresh: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const refreshToken = req.cookies?.refreshToken || req.body.refreshToken
+      const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken
       if (!refreshToken) {
         throw new AppError(401, 'REFRESH_TOKEN_MISSING', 'Refresh token is required')
       }
@@ -68,6 +73,37 @@ export const authController = {
     try {
       const user = await getMe(req.user!.userId)
       res.json({ data: { user } })
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  updateProfile: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const user = await updateProfile(req.user!.userId, req.body)
+      res.json({ data: { user }, meta: { message: 'Profile updated successfully' } })
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  changePassword: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      await changePassword(req.user!.userId, req.body)
+      disconnectUserSockets(req.user!.userId)
+      res.clearCookie('refreshToken', COOKIE_OPTIONS)
+      res.json({ data: null, meta: { message: 'Password changed successfully' } })
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  revokeSessions: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      await revokeAllSessions(req.user!.userId)
+      disconnectUserSockets(req.user!.userId)
+      res.clearCookie('refreshToken', COOKIE_OPTIONS)
+      res.json({ data: null, meta: { message: 'All sessions have been revoked' } })
     } catch (error) {
       next(error)
     }

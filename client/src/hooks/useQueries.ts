@@ -68,10 +68,9 @@ export function useInboxes(params?: { isActive?: boolean }) {
 }
 
 export function useInbox(id: string) {
-  return useQuery<ApiResponse<Inbox>, Error>({
+  return useQuery<Inbox, Error>({
     queryKey: ['inbox', id],
     queryFn: () => api.inboxes.get(id),
-    select: (res) => res.data,
     enabled: !!id,
   })
 }
@@ -118,10 +117,9 @@ export function useAliases(params?: { isActive?: boolean; targetInboxId?: string
 }
 
 export function useAlias(id: string) {
-  return useQuery<ApiResponse<Alias>, Error>({
+  return useQuery<Alias, Error>({
     queryKey: ['alias', id],
     queryFn: () => api.aliases.get(id),
-    select: (res) => res.data,
     enabled: !!id,
   })
 }
@@ -180,10 +178,9 @@ export function useEmails(params?: {
 }
 
 export function useEmail(id: string) {
-  return useQuery<ApiResponse<{ email: Email; attachments: Attachment[]; otpRecords: OtpRecord[] }>, Error>({
+  return useQuery<{ email: Email; attachments: Attachment[]; otpRecords: OtpRecord[] }, Error>({
     queryKey: ['email', id],
     queryFn: () => api.emails.get(id),
-    select: (res) => res.data,
     enabled: !!id,
   })
 }

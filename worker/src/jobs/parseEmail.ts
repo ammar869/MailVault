@@ -3,7 +3,6 @@ import crypto from 'crypto'
 import { simpleParser, ParsedMail, AddressObject } from 'mailparser'
 import { connectDB } from '../config/database.js'
 import { emailService } from '../modules/emails/email.service.js'
-import { uploadToS3 } from '../utils/s3.js'
 import { extractOtpCodes } from '../utils/extract.js'
 import { env } from '../config/env.js'
 import { logger } from '../utils/logger.js'
@@ -93,6 +92,7 @@ async function processAttachments(parsed: ParsedMail, objectPrefix: string): Pro
     const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 100)
     const s3Key: string = `attachments/${objectPrefix}/${results.length}-${safeName}`
 
+    const { uploadToS3 } = await import('../utils/s3.js')
     await uploadToS3(s3Key, content, mimeType)
 
     results.push({

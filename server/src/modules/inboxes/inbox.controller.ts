@@ -9,7 +9,12 @@ export const inboxController = {
     try {
       const inbox = await inboxService.create(req.user!.userId, req.body)
       res.status(201).json({
-        data: inbox,
+        data: {
+          ...inbox.toObject(),
+          capacity: inbox.maxMessages,
+          ttlDays: Math.max(1, Math.ceil((inbox.expiresAt.getTime() - inbox.createdAt.getTime()) / 86_400_000)),
+          usageCount: inbox.messageCount,
+        },
         meta: { message: 'Inbox created successfully' },
       })
     } catch (error) {
@@ -22,7 +27,12 @@ export const inboxController = {
       const query = req.query as unknown as ListInboxesQuery
       const { inboxes, total } = await inboxService.list(req.user!.userId, query)
       res.json({
-        data: inboxes,
+        data: inboxes.map((inbox) => ({
+          ...inbox.toObject(),
+          capacity: inbox.maxMessages,
+          ttlDays: Math.max(1, Math.ceil((inbox.expiresAt.getTime() - inbox.createdAt.getTime()) / 86_400_000)),
+          usageCount: inbox.messageCount,
+        })),
         meta: { total, limit: query.limit, offset: query.offset },
       })
     } catch (error) {
@@ -33,7 +43,12 @@ export const inboxController = {
   getById: async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const inbox = await inboxService.getById(req.user!.userId, req.params.id)
-      res.json({ data: inbox })
+      res.json({ data: {
+        ...inbox.toObject(),
+        capacity: inbox.maxMessages,
+        ttlDays: Math.max(1, Math.ceil((inbox.expiresAt.getTime() - inbox.createdAt.getTime()) / 86_400_000)),
+        usageCount: inbox.messageCount,
+      } })
     } catch (error) {
       next(error)
     }

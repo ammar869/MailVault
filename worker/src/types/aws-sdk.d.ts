@@ -9,6 +9,9 @@ declare module '@aws-sdk/client-s3' {
   export class GetObjectCommand {
     constructor(input: any)
   }
+  export class DeleteObjectCommand {
+    constructor(input: any)
+  }
 }
 
 declare module '@aws-sdk/s3-request-presigner' {

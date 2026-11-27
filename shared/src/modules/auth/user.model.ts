@@ -2,7 +2,9 @@ import mongoose, { Schema, model, Document } from 'mongoose'
 
 export interface IUser extends Document {
   email: string
+  name: string | null
   passwordHash: string
+  tokenVersion: number
   emailVerified: boolean
   role: 'owner' | 'admin'
   plan: 'free' | 'pro'
@@ -20,11 +22,13 @@ const userSchema = new Schema<IUser>(
       trim: true,
       index: true,
     },
+    name: { type: String, trim: true, maxlength: 100, default: null },
     passwordHash: {
       type: String,
       required: true,
       select: false,
     },
+    tokenVersion: { type: Number, default: 0, min: 0 },
     emailVerified: {
       type: Boolean,
       default: false,

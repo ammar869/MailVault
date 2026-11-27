@@ -16,6 +16,7 @@ export interface TokenPayload {
   email: string
   role: string
   type: 'access' | 'refresh'
+  tokenVersion?: number
 }
 
 export interface AuthTokens {
@@ -34,11 +35,12 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-export const generateTokens = async (user: { _id: string; email: string; role: string }): Promise<AuthTokens> => {
+export const generateTokens = async (user: { _id: string; email: string; role: string; tokenVersion?: number }): Promise<AuthTokens> => {
   const payload: Omit<TokenPayload, 'type'> = {
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    tokenVersion: user.tokenVersion ?? 0,
   }
 
   const accessToken = await new SignJWT({ ...payload, type: 'access' })
@@ -58,12 +60,18 @@ export const generateTokens = async (user: { _id: string; email: string; role: s
 
 export const verifyAccessToken = async (token: string): Promise<TokenPayload> => {
   const { payload } = await jwtVerify(token, accessSecretKey)
-  return payload as unknown as TokenPayload
+  const parsed = payload as unknown as TokenPayload
+  const user = await User.findById(parsed.userId).select('tokenVersion').lean().exec()
+  if (!user || (parsed.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) throw new Error('Revoked access token')
+  return parsed
 }
 
 export const verifyRefreshToken = async (token: string): Promise<TokenPayload> => {
   const { payload } = await jwtVerify(token, refreshSecretKey)
-  return payload as unknown as TokenPayload
+  const parsed = payload as unknown as TokenPayload
+  const user = await User.findById(parsed.userId).select('tokenVersion').lean().exec()
+  if (!user || (parsed.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) throw new Error('Revoked refresh token')
+  return parsed
 }
 
 export const register = async (input: RegisterInput): Promise<{ user: any; tokens: AuthTokens }> => {
@@ -76,6 +84,7 @@ export const register = async (input: RegisterInput): Promise<{ user: any; token
 
   const user = await User.create({
     email: input.email,
+    name: input.name || null,
     passwordHash,
   })
 
@@ -86,6 +95,7 @@ export const register = async (input: RegisterInput): Promise<{ user: any; token
   const userResponse = {
     id: user._id,
     email: user.email,
+    name: user.name,
     emailVerified: user.emailVerified,
     role: user.role,
     plan: user.plan,
@@ -113,6 +123,7 @@ export const login = async (input: LoginInput): Promise<{ user: any; tokens: Aut
   const userResponse = {
     id: user._id,
     email: user.email,
+    name: user.name,
     emailVerified: user.emailVerified,
     role: user.role,
     plan: user.plan,
@@ -151,9 +162,35 @@ export const getMe = async (userId: string) => {
   return {
     id: user._id,
     email: user.email,
+    name: user.name,
     emailVerified: user.emailVerified,
     role: user.role,
     plan: user.plan,
     createdAt: user.createdAt,
   }
+}
+
+export const updateProfile = async (userId: string, input: { name: string }) => {
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $set: { name: input.name.trim() || null } },
+    { new: true, runValidators: true },
+  ).exec()
+  if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found')
+  return { id: user._id.toString(), email: user.email, name: user.name, emailVerified: user.emailVerified, role: user.role, plan: user.plan, createdAt: user.createdAt }
+}
+
+export const changePassword = async (userId: string, input: { currentPassword: string; newPassword: string }): Promise<void> => {
+  const user = await User.findById(userId).select('+passwordHash').exec()
+  if (!user || !await verifyPassword(input.currentPassword, user.passwordHash)) {
+    throw new AppError(401, 'INVALID_CREDENTIALS', 'Current password is incorrect')
+  }
+  user.passwordHash = await hashPassword(input.newPassword)
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1
+  await user.save()
+}
+
+export const revokeAllSessions = async (userId: string): Promise<void> => {
+  const result = await User.updateOne({ _id: userId }, { $inc: { tokenVersion: 1 } }).exec()
+  if (!result.matchedCount) throw new AppError(404, 'USER_NOT_FOUND', 'User not found')
 }

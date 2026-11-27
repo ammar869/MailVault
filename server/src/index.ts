@@ -77,6 +77,7 @@ async function checkRedisConnection(): Promise<boolean> {
     maxRetriesPerRequest: 1,
     retryStrategy: () => null,
   })
+  probe.on('error', () => undefined)
   try {
     await probe.connect()
     await probe.ping()

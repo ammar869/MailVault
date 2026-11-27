@@ -1,30 +1,28 @@
+import crypto from 'crypto'
 import { Inbox } from './inbox.model.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import { auditService } from '@mailvault/shared'
 import { logger } from '../../utils/logger.js'
 import type { CreateInboxInput, UpdateInboxInput, ListInboxesQuery } from './inbox.schema.js'
 
-const DOMAIN_POOL = ['mailvault.example', 'temp.mailvault.app', 'disposable.mailvault.io']
+const DOMAIN_POOL = ['mailvault.app', 'tempmail.io', 'disposable.email']
 
-function generateAddress(type: string, domain: string): string {
-  const prefix = type === 'alias' ? 'alias' : 'temp'
-  const random = Math.random().toString(36).substring(2, 10)
-  return `${prefix}-${random}@${domain}`
-}
-
-function calculateExpiresAt(ttlHours?: number, expiresAt?: string): Date {
+function calculateExpiresAt(ttlHours?: number, ttlDays?: number, expiresAt?: string): Date {
   if (expiresAt) {
     return new Date(expiresAt)
   }
-  const hours = ttlHours || 24
+  const hours = ttlHours ?? (ttlDays ?? 7) * 24
   return new Date(Date.now() + hours * 60 * 60 * 1000)
 }
 
 export const inboxService = {
   async create(userId: string, input: CreateInboxInput) {
-    const domain = DOMAIN_POOL[Math.floor(Math.random() * DOMAIN_POOL.length)]
-    const address = generateAddress(input.type, domain)
-    const expiresAt = calculateExpiresAt(input.ttlHours, input.expiresAt)
+    const domain = (input.domain || DOMAIN_POOL[Math.floor(Math.random() * DOMAIN_POOL.length)]).toLowerCase()
+    const localPart = input.localPart?.toLowerCase() || `${input.type === 'alias' ? 'alias' : 'temp'}-${crypto.randomBytes(5).toString('hex')}`
+    const address = `${localPart}@${domain}`
+    const exists = await Inbox.exists({ address })
+    if (exists) throw new AppError(409, 'ADDRESS_EXISTS', 'Inbox address already exists')
+    const expiresAt = calculateExpiresAt(input.ttlHours, input.ttlDays, input.expiresAt)
 
     const inbox = await Inbox.create({
       userId,
@@ -33,7 +31,7 @@ export const inboxService = {
       type: input.type,
       displayName: input.displayName || address.split('@')[0],
       expiresAt,
-      maxMessages: input.maxMessages || 100,
+      maxMessages: input.capacity ?? input.maxMessages ?? 100,
       aiEnabled: input.aiEnabled || false,
       settings: input.settings || {},
     })
@@ -44,7 +42,7 @@ export const inboxService = {
   },
 
   async list(userId: string, query: ListInboxesQuery) {
-    const filter: Record<string, any> = { userId, isActive: true, expiresAt: { $gt: new Date() } }
+    const filter: Record<string, any> = { userId, expiresAt: { $gt: new Date() } }
     if (query.type) filter.type = query.type
     if (query.isActive !== undefined) filter.isActive = query.isActive
 
@@ -92,10 +90,11 @@ export const inboxService = {
   },
 
   async delete(userId: string, inboxId: string) {
-    const inbox = await Inbox.findOneAndDelete({
-      _id: inboxId,
-      userId,
-    })
+    const inbox = await Inbox.findOneAndUpdate(
+      { _id: inboxId, userId },
+      { $set: { isActive: false } },
+      { new: true },
+    )
 
     if (!inbox) {
       throw new AppError(404, 'INBOX_NOT_FOUND', 'Inbox not found')

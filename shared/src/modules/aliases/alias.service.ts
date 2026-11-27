@@ -103,7 +103,11 @@ export const aliasService = {
   },
 
   async findByAddress(address: string) {
-    return Alias.findOne({ address: address.toLowerCase(), isActive: true }).exec()
+    return Alias.findOne({
+      address: address.toLowerCase(),
+      isActive: true,
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+    }).exec()
   },
 
   async incrementUsage(aliasId: string) {

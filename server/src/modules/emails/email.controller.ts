@@ -2,7 +2,6 @@ import { Response, NextFunction } from 'express'
 import { emailService } from './email.service.js'
 import { AppError } from '../../middleware/errorHandler.js'
 import { AuthRequest } from '../../middleware/authenticate.js'
-import { getPresignedUrl } from '../../utils/s3.js'
 import type { ListEmailsQuery, UpdateEmailInput } from './email.schema.js'
 import { OtpRecord } from './otp.model.js'
 
@@ -65,6 +64,7 @@ export const emailController = {
         throw new AppError(404, 'EMAIL_NOT_FOUND', 'Email not found')
       }
 
+      const { getPresignedUrl } = await import('../../utils/s3.js')
       const url = await getPresignedUrl(attachment.s3Bucket, attachment.s3Key, 300)
       res.json({ data: { url, filename: attachment.filename, mimeType: attachment.mimeType, size: attachment.size } })
     } catch (error) {

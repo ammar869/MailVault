@@ -1,17 +1,53 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { useLogout } from '../hooks/useAuth'
-import { User, Mail, Key, Bell, Shield, Trash2, LogOut } from 'lucide-react'
+import { api } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
+import { User, Mail, Bell, Shield, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 
+const API_KEY_SCOPES = ['emails:read', 'emails:write', 'inboxes:read', 'inboxes:write', 'aliases:read', 'aliases:write', 'analytics:read', 'webhooks:read', 'webhooks:write']
+
 export function SettingsPage() {
-  const { user, clearAuth } = useAuthStore()
-  const logout = useLogout()
+  const { user, setUser, clearAuth } = useAuthStore()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'account' | 'security' | 'notifications' | 'danger'>('account')
   const [name, setName] = useState(user?.name || '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [formError, setFormError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [revokingSessions, setRevokingSessions] = useState(false)
+  const [apiKeys, setApiKeys] = useState<any[]>([])
+  const [apiKeyName, setApiKeyName] = useState('')
+  const [apiKeyScopes, setApiKeyScopes] = useState<string[]>(['emails:read', 'inboxes:read'])
+  const [newApiKey, setNewApiKey] = useState('')
+  const [webhooks, setWebhooks] = useState<any[]>([])
+  const [webhookName, setWebhookName] = useState('')
+  const [webhookUrl, setWebhookUrl] = useState('')
+
+  const loadApiKeys = useCallback(async () => {
+    try {
+      const result = await api.apiKeys.list()
+      setApiKeys(result.data)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not load API keys.')
+    }
+  }, [])
+
+  const loadWebhooks = useCallback(async () => {
+    try {
+      const result = await api.webhooks.list()
+      setWebhooks(result.data)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not load webhook endpoints.')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadApiKeys()
+    void loadWebhooks()
+  }, [loadApiKeys, loadWebhooks])
 
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
@@ -20,38 +56,110 @@ export function SettingsPage() {
     { id: 'danger', label: 'Danger Zone', icon: Trash2 },
   ]
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement profile update API
-    alert('Profile saved (API not implemented yet)')
+    setFormError('')
+    setNotice('')
+    try {
+      const result = await api.auth.updateProfile(name)
+      setUser(result.user)
+      setNotice('Profile updated.')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not update profile.')
+    }
   }
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError('')
+    setNotice('')
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match')
+      setFormError('Passwords do not match.')
       return
     }
     if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters')
+      setFormError('Password must be at least 8 characters.')
       return
     }
-    // TODO: Implement password change API
-    alert('Password changed (API not implemented yet)')
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
+    try {
+      await api.auth.changePassword(currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      clearAuth()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not change password.')
+    }
   }
 
-  const handleLogout = () => {
-    logout.mutate()
-    clearAuth()
+  const handleRevokeSessions = async () => {
+    if (!confirm('Sign out all devices, including this one?')) return
+    setFormError('')
+    setRevokingSessions(true)
+    try {
+      await api.auth.revokeSessions()
+      clearAuth()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not revoke sessions.')
+      setRevokingSessions(false)
+    }
+  }
+
+  const handleCreateApiKey = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setFormError('')
+    setNewApiKey('')
+    try {
+      const result = await api.apiKeys.create(apiKeyName, apiKeyScopes)
+      setNewApiKey(result.key)
+      setApiKeyName('')
+      await loadApiKeys()
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not create API key.')
+    }
+  }
+
+  const handleDeleteApiKey = async (id: string) => {
+    if (!confirm('Revoke this API key? Applications using it will lose access.')) return
+    try {
+      await api.apiKeys.delete(id)
+      await loadApiKeys()
+      setNotice('API key revoked.')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not revoke API key.')
+    }
+  }
+
+  const handleCreateWebhook = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setFormError('')
+    try {
+      await api.webhooks.create(webhookName, webhookUrl, ['email.new'])
+      setWebhookName('')
+      setWebhookUrl('')
+      await loadWebhooks()
+      setNotice('Webhook endpoint created.')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not create webhook endpoint.')
+    }
+  }
+
+  const handleDeleteWebhook = async (id: string) => {
+    if (!confirm('Delete this webhook endpoint?')) return
+    try {
+      await api.webhooks.delete(id)
+      await loadWebhooks()
+      setNotice('Webhook endpoint deleted.')
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not delete webhook endpoint.')
+    }
   }
 
   const handleDeleteAccount = () => {
     if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      // TODO: Implement account deletion API
-      alert('Account deletion (API not implemented yet)')
+      setFormError('Account deletion is not available yet.')
     }
   }
 
@@ -62,6 +170,11 @@ export function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-600 mt-1">Manage your account and preferences</p>
       </div>
+      {(formError || notice) && (
+        <div className={clsx('rounded-lg p-3 text-sm', formError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700')} role={formError ? 'alert' : 'status'}>
+          {formError || notice}
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
@@ -124,10 +237,51 @@ export function SettingsPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">API Access</h2>
-            <p className="text-gray-600 mb-4">API keys coming soon. Use your JWT access token for authenticated requests.</p>
-            <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm text-gray-700 break-all">
-              Authorization: Bearer {user?.accessToken?.slice(0, 20)}...
-            </div>
+            <form onSubmit={handleCreateApiKey} className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700" htmlFor="apiKeyName">New key name</label>
+              <div className="flex gap-2">
+                <input id="apiKeyName" value={apiKeyName} onChange={(event) => setApiKeyName(event.target.value)} className="input-field" maxLength={100} required placeholder="My integration" />
+                <button type="submit" disabled={!apiKeyScopes.length} className="btn-primary whitespace-nowrap">Create key</button>
+              </div>
+              <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
+                <legend className="mb-2 text-sm font-medium text-gray-700">Permissions</legend>
+                {API_KEY_SCOPES.map((scope) => (
+                  <label key={scope} className="flex items-center gap-1.5 text-xs text-gray-600">
+                    <input type="checkbox" checked={apiKeyScopes.includes(scope)} onChange={(event) => setApiKeyScopes((current) => event.target.checked ? [...current, scope] : current.filter((item) => item !== scope))} />
+                    {scope}
+                  </label>
+                ))}
+              </fieldset>
+            </form>
+            {newApiKey && <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm" role="status">
+              <p className="font-medium text-amber-900">Copy this key now. It will not be shown again.</p>
+              <code className="mt-2 block break-all text-amber-950">{newApiKey}</code>
+              <button type="button" onClick={() => navigator.clipboard.writeText(newApiKey)} className="mt-2 underline">Copy key</button>
+            </div>}
+            <ul className="mt-4 divide-y divide-gray-100">
+              {apiKeys.map((key) => <li key={key._id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div><p className="font-medium text-gray-800">{key.name}</p><p className="font-mono text-xs text-gray-500">{key.keyPrefix}••••••</p></div>
+                <button type="button" onClick={() => handleDeleteApiKey(key._id)} className="text-red-600 hover:underline">Revoke</button>
+              </li>)}
+              {!apiKeys.length && <li className="py-3 text-sm text-gray-500">No API keys yet.</li>}
+            </ul>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Outgoing webhooks</h2>
+            <p className="text-sm text-gray-600 mb-4">Send an <code>email.new</code> event to your service.</p>
+            <form onSubmit={handleCreateWebhook} className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+              <input value={webhookName} onChange={(event) => setWebhookName(event.target.value)} className="input-field" placeholder="Endpoint name" maxLength={100} required />
+              <input type="url" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} className="input-field" placeholder="https://example.com/webhooks" required />
+              <button type="submit" className="btn-primary">Add endpoint</button>
+            </form>
+            <ul className="mt-4 divide-y divide-gray-100">
+              {webhooks.map((webhook) => <li key={webhook._id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div className="min-w-0"><p className="font-medium text-gray-800">{webhook.name}</p><p className="truncate text-xs text-gray-500">{webhook.url}</p></div>
+                <button type="button" onClick={() => handleDeleteWebhook(webhook._id)} className="text-red-600 hover:underline">Delete</button>
+              </li>)}
+              {!webhooks.length && <li className="py-3 text-sm text-gray-500">No webhook endpoints yet.</li>}
+            </ul>
           </div>
         </div>
       )}
@@ -186,7 +340,7 @@ export function SettingsPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Sessions</h2>
-            <p className="text-gray-600 mb-4">Session management coming soon.</p>
+            <p className="text-gray-600 mb-4">Revoke access tokens and refresh cookies on all devices.</p>
             <div className="border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -265,9 +419,11 @@ export function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900">Sign Out Everywhere</p>
-                <p className="text-sm text-gray-500">Revoke all active sessions except current</p>
+                <p className="text-sm text-gray-500">Sign out all devices, including this one</p>
               </div>
-              <button className="btn-secondary">Sign Out (Coming Soon)</button>
+              <button onClick={handleRevokeSessions} disabled={revokingSessions} className="btn-secondary">
+                {revokingSessions ? 'Signing out…' : 'Sign out everywhere'}
+              </button>
             </div>
           </div>
         </div>

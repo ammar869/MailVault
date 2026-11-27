@@ -16,16 +16,19 @@ npm run dev:client
 
 Open <http://localhost:5173>.
 
-To run the API and background worker as well, start MongoDB and Redis locally, set
-`MONGODB_URI` and `REDIS_URL` in `.env`, then run these in separate terminals:
+To run the API, start MongoDB locally and set `MONGODB_URI` in `.env`. Redis is
+needed for background email processing and realtime features; start it locally
+and set `REDIS_URL` before running the worker:
 
 ```bash
 npm run dev:server
 npm run dev:worker
 ```
 
-The client can load without those services, but login, email, inbox, and other
-API-backed features require MongoDB and Redis to be running locally.
+The client can load without those services. Login and inbox management need
+MongoDB; inbound email processing, realtime updates, and scheduled cleanup also
+need Redis. Real inbound delivery additionally requires a verified email domain
+and provider webhook configuration.
 
 ## Other scripts
 
@@ -33,5 +36,5 @@ API-backed features require MongoDB and Redis to be running locally.
 - `npm run typecheck` — type-check all workspaces
 - `npm run build` — build all workspaces
 
-Docker Compose files remain under `infrastructure/` for later use, but the
-development instructions above do not start or depend on Docker.
+Docker is disabled for now. The Compose configuration under `infrastructure/`
+is commented out; local development does not start or depend on Docker.
